@@ -29,7 +29,7 @@ if "logs" not in st.session_state:
 urls_input = st.text_area(
     "Dán toàn bộ văn bản hoặc danh sách link vào đây:",
     height=200,
-    placeholder="Dán nguyên văn bản bài viết Google Docs chứa link vào đây...",
+    placeholder="Dán nguyên văn bản bài viết Google Docs/Google Sheets chứa link vào đây...",
 )
 
 if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
