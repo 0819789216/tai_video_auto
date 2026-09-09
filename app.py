@@ -31,7 +31,7 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
         with open("text.txt", "w", encoding="utf-8") as f:
             f.write(urls_input.strip())
 
-        output_dir = "downloaded_videos"
+        output_dir = "VIDEOS"
         zip_path = "danh_sach_video_hoan_thanh.zip"
 
         # Dọn dẹp thư mục cũ trước khi tải mới
