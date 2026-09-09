@@ -349,4 +349,4 @@ for index, url in enumerate(urls, start=1):
     if not success:
         print(f"❌ Lỗi: Không thể tải video {index} ({url})")
 
-print("\n Hoàn thành! Kiểm tra thư mục 'VIDEOS'.")
+print("\n Hoàn thành tải videos")
