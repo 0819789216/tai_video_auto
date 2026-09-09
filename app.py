@@ -11,24 +11,24 @@ st.set_page_config(
     layout="centered",
 )
 
-# Chèn CSS và HTML tạo dòng chữ chạy cố định ở góc trên bên trái
 st.markdown(
     """
     <style>
     .running-banner {
         position: fixed;
-        top: 10px;
-        left: 10px;
+        top: 12px;
+        left: 12px;
         z-index: 999999;
-        background-color: #ffefc1;
+        background-color: #fff3cd;
         color: #856404;
-        padding: 6px 12px;
-        border-radius: 6px;
-        font-weight: bold;
+        padding: 6px 14px;
+        border-radius: 8px;
+        font-weight: 600;
         font-size: 13px;
-        border: 1px solid #ffeba8;
-        box-shadow: 0px 2px 6px rgba(0,0,0,0.1);
-        max-width: 320px;
+        border: 1px solid #ffeeba;
+        box-shadow: 0px 4px 10px rgba(0,0,0,0.08);
+        width: 480px; /* Tăng chiều dài khung chứa */
+        max-width: 80vw; /* Đảm bảo không bị vỡ giao diện trên điện thoại */
         overflow: hidden;
         white-space: nowrap;
     }
@@ -37,8 +37,8 @@ st.markdown(
     }
     </style>
     <div class="running-banner">
-        <marquee behavior="scroll" direction="left" scrollamount="4">
-            ⚠️ Toll nhà làm có lỗi thì mọi người nhẹ nhàng lên hệ Ngọc Én để xử lý nhó
+        <marquee behavior="scroll" direction="left" scrollamount="5">
+            ⚠️ Dự án mới nhú có lỗi liên hệ Ngọc Én-.- Chúc bạn tải video vui vẻ và thao tác mượt mà nhé!
         </marquee>
     </div>
     """,
