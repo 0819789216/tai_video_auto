@@ -161,7 +161,6 @@ def download_storyful_api(url, save_path):
 # 4. HÀM TẢI INSTAGRAM, TIKTOK, GOOGLE DRIVE & DOUYIN
 # ==========================================
 def download_gdrive_api(url, save_path):
-    """Hàm tải file video từ Google Drive"""
     try:
         gdown.download(url, save_path, quiet=True, fuzzy=True)
         if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
@@ -215,7 +214,6 @@ def download_tiktok_api(url, save_path):
     return False
 
 def download_douyin_fast(url, save_path):
-    """Tải Douyin TỐC ĐỘ CAO BẰNG YT-DLP CLI KHÔNG QUA TRUNG GIAN API"""
     cmd = [
         "yt-dlp",
         url,
@@ -247,7 +245,6 @@ def download_douyin_fast(url, save_path):
     except Exception:
         pass
 
-    # Gateway dự phòng 2: TikWM Stream API
     try:
         api_url = f"https://www.tikwm.com/api/?url={url}&hd=1"
         res = requests.get(api_url, timeout=8).json()
@@ -280,7 +277,7 @@ for index, url in enumerate(urls, start=1):
     save_path = os.path.join(OUTPUT_DIR, f"{index}.mp4")
     success = False
 
-    # 1. Douyin (Tải bằng yt-dlp CLI + Cookies siêu ổn định)
+    # 1. Douyin
     if "douyin.com" in url or "iesdouyin.com" in url:
         if download_douyin_fast(url, save_path):
             print(f"✅ [Douyin HD - CLI Fast] Thành công: {index}.mp4")
