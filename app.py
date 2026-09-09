@@ -13,7 +13,7 @@ st.set_page_config(
 
 st.title("🎬 Công Cụ Tải Video Đa Nền Tảng")
 st.caption(
-    "Hỗ trợ copy/paste nguyên bài Docs/Text chứa link (Douyin, TikTok, Threads, Insta, Drive...)"
+    "Được phát bởi Ngọc Én hẹ hẹ!!!"
 )
 
 # 1. Khởi tạo Session State giữ nguyên kết quả không bị mất khi nhấn nút Tải xuống
@@ -45,7 +45,6 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
         with open("text.txt", "w", encoding="utf-8") as f:
             f.write(urls_input.strip())
 
-        # Tên thư mục khớp hoàn toàn với main.py (VIDEOS)
         output_dir = "VIDEOS"
         zip_path = "danh_sach_video_hoan_thanh.zip"
 
