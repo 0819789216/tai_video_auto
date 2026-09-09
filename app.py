@@ -11,6 +11,40 @@ st.set_page_config(
     layout="centered",
 )
 
+# Chèn CSS và HTML tạo dòng chữ chạy cố định ở góc trên bên trái
+st.markdown(
+    """
+    <style>
+    .running-banner {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        z-index: 999999;
+        background-color: #ffefc1;
+        color: #856404;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-weight: bold;
+        font-size: 13px;
+        border: 1px solid #ffeba8;
+        box-shadow: 0px 2px 6px rgba(0,0,0,0.1);
+        max-width: 320px;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+    .running-banner marquee {
+        vertical-align: middle;
+    }
+    </style>
+    <div class="running-banner">
+        <marquee behavior="scroll" direction="left" scrollamount="4">
+            ⚠️ Toll nhà làm có lỗi thì mọi người nhẹ nhàng lên hệ Ngọc Én để xử lý nhó
+        </marquee>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 st.title("🎬 TOLL TẢI VIDEO NHÀ LÀM 🥲")
 st.caption("Được phát hành bởi Ngọc Én hẹ hẹ!!!")
 
