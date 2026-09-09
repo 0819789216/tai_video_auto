@@ -1,159 +1,361 @@
 import os
-import shutil
+import re
 import subprocess
 import sys
-import zipfile
-import streamlit as st
+import time
+from pathlib import Path
 
-st.set_page_config(
-    page_title="Toll Tải Video Nhà Làm:))",
-    page_icon="🎬",
-    layout="centered",
-)
+# ==========================================
+# 1. KIỂM TRA VÀ TỰ ĐỘNG CÀI THƯ VIỆN CẦN THIẾT
+# ==========================================
+def auto_install_packages():
+    required_packages = ["requests", "yt-dlp", "cloudscraper", "gdown"]
+    for pkg in required_packages:
+        try:
+            __import__(pkg)
+        except ImportError:
+            print(f"⏳ Đang cài đặt thư viện {pkg}...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
 
-st.markdown(
-    """
-    <style>
-    .running-banner {
-        position: fixed;
-        top: 12px;
-        left: 12px;
-        z-index: 999999;
-        background-color: #fff3cd;
-        color: #856404;
-        padding: 6px 14px;
-        border-radius: 8px;
-        font-weight: 600;
-        font-size: 13px;
-        border: 1px solid #ffeeba;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.08);
-        width: 480px; /* Tăng chiều dài khung chứa */
-        max-width: 80vw; /* Đảm bảo không bị vỡ giao diện trên điện thoại */
-        overflow: hidden;
-        white-space: nowrap;
-    }
-    .running-banner marquee {
-        vertical-align: middle;
-    }
-    </style>
-    <div class="running-banner">
-        <marquee behavior="scroll" direction="left" scrollamount="5">
-            ⚠️ Dự án mới nhú có lỗi liên hệ Ngọc Én (HCNS). Để dùng bản Pro vui lòng donate trà sữa size L và full topping😍!
-        </marquee>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.title("🎬 TOLL TẢI VIDEO NHÀ LÀM 🥲")
-st.caption("Được phát hành bởi Ngọc Én hẹ hẹ!!!")
-
-# 1. Khởi tạo Session State giữ nguyên kết quả không bị mất khi nhấn nút Tải xuống
-if "zip_bytes" not in st.session_state:
-    st.session_state.zip_bytes = None
-if "success_count" not in st.session_state:
-    st.session_state.success_count = 0
-if "failed_links" not in st.session_state:
-    st.session_state.failed_links = []
-if "logs" not in st.session_state:
-    st.session_state.logs = []
-
-urls_input = st.text_area(
-    "Dán toàn bộ văn bản hoặc danh sách link vào đây:",
-    height=200,
-    placeholder="Dán nguyên văn bản bài viết Google Docs/Google Sheets chứa link vào đây...",
-)
-
-if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
-    if not urls_input.strip():
-        st.warning("⚠️ Vui lòng dán văn bản/link vào ô trên!")
-    else:
-        # Reset trạng thái mỗi khi nhấn tải lượt mới
-        st.session_state.zip_bytes = None
-        st.session_state.success_count = 0
-        st.session_state.failed_links = []
-        st.session_state.logs = []
-
-        with open("text.txt", "w", encoding="utf-8") as f:
-            f.write(urls_input.strip())
-
-        output_dir = "VIDEOS"
-        zip_path = "danh_sach_video_hoan_thanh.zip"
-
-        if os.path.exists(output_dir):
-            shutil.rmtree(output_dir)
-        if os.path.exists(zip_path):
-            os.remove(zip_path)
-
-        st.info("⏳ Đang phân tích và tiến hành tải video hàng loạt...")
-
-        status_text = st.empty()
-        log_expander = st.expander("📋 Nhật ký tiến trình (Terminal Live)", expanded=True)
-        log_box = log_expander.empty()
-
-        # Khởi chạy main.py ở chế độ unbuffered (-u)
-        process = subprocess.Popen(
-            [sys.executable, "-u", "main.py"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="ignore",
-            bufsize=1,
+    try:
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
+    except Exception:
+        pass
 
-        for line in iter(process.stdout.readline, ""):
-            st.session_state.logs.append(line)
-            # Giữ khung log cuộn xem 20 dòng mới nhất
-            log_box.code("".join(st.session_state.logs[-20:]), language="text")
+auto_install_packages()
 
-            if "Đang tải" in line:
-                status_text.markdown(f"**{line.strip()}**")
-            elif "Lỗi: Không thể tải video" in line:
-                # Bắt đúng dòng báo lỗi chính thức từ main.py
-                st.session_state.failed_links.append(line.strip())
+import cloudscraper
+import gdown
+import requests
+import yt_dlp
 
-        process.wait()
+INPUT_FILE = "text.txt"
+OUTPUT_DIR = "VIDEOS"
+COOKIES_FILE = "cookies.txt"
 
-        # Kiểm tra kết quả trong thư mục VIDEOS
-        if os.path.exists(output_dir) and os.listdir(output_dir):
-            files = [f for f in os.listdir(output_dir) if f.endswith(".mp4")]
-            st.session_state.success_count = len(files)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-            # Đóng gói ZIP
-            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-                for file in files:
-                    file_full_path = os.path.join(output_dir, file)
-                    zipf.write(file_full_path, arcname=file)
+urls = []
+if os.path.exists(INPUT_FILE):
+    with open(INPUT_FILE, "r", encoding="utf-8") as f:
+        for line in f:
+            found = re.findall(r"(?:https?://|www\.)[^\s\)]+", line)
+            for url in found:
+                clean_url = url.strip().rstrip('.,;)"\'\xa0')
+                if not clean_url.startswith("http"):
+                    clean_url = "https://" + clean_url
+                urls.append(clean_url)
 
-            with open(zip_path, "rb") as fp:
-                st.session_state.zip_bytes = fp.read()
+print(
+    f"📌 Tìm thấy {len(urls)} link trong file {INPUT_FILE}. Bắt đầu tải theo đúng thứ tự 1->{len(urls)}...\n"
+)
 
-            # Dọn dẹp thư mục tạm trên mây
-            shutil.rmtree(output_dir)
-            if os.path.exists(zip_path):
-                os.remove(zip_path)
-
-            st.rerun()
-        else:
-            st.error("❌ Không thể tải video nào. Vui lòng kiểm tra lại danh sách link hoặc file cookies.txt!")
-
-# 2. KHU VỰC HIỂN THỊ KẾT QUẢ CỐ ĐỊNH (Không bị reset khi bấm Tải file)
-if st.session_state.zip_bytes is not None:
-    if st.session_state.logs:
-        with st.expander("📋 Xem lại Nhật ký tiến trình đã chạy", expanded=False):
-            st.code("".join(st.session_state.logs), language="text")
-
-    st.success(f"🎉 Hoàn tất! Đã tải thành công {st.session_state.success_count} video.")
-
-    if st.session_state.failed_links:
-        st.warning(f"⚠️ Phát hiện {len(st.session_state.failed_links)} video bị lỗi không tải được:")
-        st.code("\n".join(st.session_state.failed_links), language="text")
-
-    st.download_button(
-        label=f"📥 TẢI XUỐNG TẤT CẢ ({st.session_state.success_count} VIDEO - FILE .ZIP)",
-        data=st.session_state.zip_bytes,
-        file_name="danh_sach_video.zip",
-        mime="application/zip",
-        type="primary",
+# ==========================================
+# 2. HÀM TẢI THREADS
+# ==========================================
+def download_threads_api(url, save_path):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+    }
+    scraper = cloudscraper.create_scraper()
+    clean_url = re.sub(r"threads\.com", "threads.net", url, flags=re.IGNORECASE)
+    clean_url = re.sub(
+        r"/media/?(?:\?.*)?$", "", clean_url, flags=re.IGNORECASE
     )
+    clean_url = clean_url.split("?")[0].rstrip("/")
+
+    for attempt in range(3):
+        try:
+            api_url = f"https://api.threadsphotodownloader.com/v2/media?url={clean_url}"
+            res = scraper.get(api_url, headers=headers, timeout=12).json()
+            video_urls = [
+                v.get("download_url") or v.get("url")
+                for v in res.get("video_urls", [])
+                if v
+            ]
+            if video_urls and video_urls[0]:
+                v_data = scraper.get(video_urls[0], timeout=25).content
+                if len(v_data) > 10000:
+                    with open(save_path, "wb") as f:
+                        f.write(v_data)
+                    return True
+        except Exception:
+            time.sleep(1)
+    return False
+
+# ==========================================
+# 3. HÀM TẢI COLLAB INC & STORYFUL
+# ==========================================
+def download_collab_inc_web(url, save_path):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Referer": "https://vl.collab.inc/",
+        "Origin": "https://vl.collab.inc",
+    }
+    try:
+        scraper = cloudscraper.create_scraper()
+        res = scraper.get(url, headers=headers, timeout=15)
+        video_matches = re.findall(
+            r'https?://[^\s"\']+\.(?:mp4|m3u8)[^\s"\']*', res.text
+        )
+        for media_url in video_matches:
+            media_url = media_url.replace("\\/", "/").replace("&amp;", "&")
+            if ".mp4" in media_url and "m3u8" not in media_url:
+                v_res = scraper.get(
+                    media_url, headers=headers, stream=True, timeout=25
+                )
+                if v_res.status_code == 200:
+                    with open(save_path, "wb") as f:
+                        for chunk in v_res.iter_content(
+                            chunk_size=1024 * 1024
+                        ):
+                            if chunk:
+                                f.write(chunk)
+                    if (
+                        os.path.exists(save_path)
+                        and os.path.getsize(save_path) > 100000
+                    ):
+                        return True
+    except Exception:
+        pass
+    return False
+
+def download_storyful_api(url, save_path):
+    headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://storyful.com/"}
+    record_id_match = re.search(r"/record/(\d+)", url)
+    record_id = record_id_match.group(1) if record_id_match else None
+    scraper = cloudscraper.create_scraper()
+    if record_id:
+        try:
+            api_url = f"https://api.storyful.com/stories/{record_id}"
+            res = scraper.get(api_url, headers=headers, timeout=12).json()
+            for media in res.get("story", {}).get("media", []):
+                video_url = media.get("video_url") or media.get("url")
+                if video_url:
+                    v_res = scraper.get(
+                        video_url, headers=headers, stream=True, timeout=25
+                    )
+                    if v_res.status_code == 200:
+                        with open(save_path, "wb") as f:
+                            for chunk in v_res.iter_content(
+                                chunk_size=1024 * 1024
+                            ):
+                                if chunk:
+                                    f.write(chunk)
+                        if (
+                            os.path.exists(save_path)
+                            and os.path.getsize(save_path) > 10000
+                        ):
+                            return True
+        except Exception:
+            pass
+    return False
+
+# ==========================================
+# 4. HÀM TẢI INSTAGRAM, TIKTOK, GOOGLE DRIVE & DOUYIN
+# ==========================================
+def download_gdrive_api(url, save_path):
+    try:
+        gdown.download(url, save_path, quiet=True, fuzzy=True)
+        if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
+            return True
+    except Exception:
+        pass
+    return False
+
+def download_instagram_api(url, save_path):
+    headers = {"User-Agent": "Mozilla/5.0", "Accept": "*/*"}
+    clean_url = url.split("?")[0].rstrip("/")
+    for attempt in range(3):
+        try:
+            scraper = cloudscraper.create_scraper()
+            res = scraper.post(
+                "https://indown.io/fetch",
+                data={"link": clean_url, "referer": "https://indown.io/"},
+                headers=headers,
+                timeout=12,
+            )
+            v_urls = re.findall(
+                r'href="(https?://[^\s"]+\.mp4[^\s"]*)"', res.text
+            )
+            if v_urls:
+                v_data = scraper.get(
+                    v_urls[0].replace("&amp;", "&"), timeout=25
+                ).content
+                if len(v_data) > 100000:
+                    with open(save_path, "wb") as f:
+                        f.write(v_data)
+                    return True
+        except Exception:
+            time.sleep(1)
+    return False
+
+def download_tiktok_api(url, save_path):
+    for attempt in range(3):
+        try:
+            api_url = f"https://www.tikwm.com/api/?url={url}&hd=1"
+            res = requests.get(api_url, timeout=12).json()
+            if res.get("code") == 0 and res.get("data"):
+                v_url = res["data"].get("hdplay") or res["data"].get("play")
+                if not v_url.startswith("http"):
+                    v_url = "https://www.tikwm.com" + v_url
+                v_data = requests.get(v_url, timeout=20).content
+                with open(save_path, "wb") as f:
+                    f.write(v_data)
+                return True
+        except Exception:
+            time.sleep(1)
+    return False
+
+def download_douyin_fast(url, save_path):
+    cmd = [
+        "yt-dlp",
+        url,
+        "-o",
+        save_path,
+        "--no-playlist",
+        "--no-progress",
+        "--quiet",
+        "--referer",
+        "https://www.douyin.com/",
+        "--concurrent-fragments",
+        "8",
+        "--retries",
+        "10",
+        "--fragment-retries",
+        "10",
+    ]
+    if os.path.exists(COOKIES_FILE):
+        cmd.extend(["--cookies", COOKIES_FILE])
+
+    try:
+        res = subprocess.run(
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        if (
+            res.returncode == 0
+            and os.path.exists(save_path)
+            and os.path.getsize(save_path) > 30000
+        ):
+            return True
+    except Exception:
+        pass
+
+    try:
+        api_url = f"https://www.tikwm.com/api/?url={url}&hd=1"
+        res = requests.get(api_url, timeout=8).json()
+        if res.get("code") == 0 and res.get("data"):
+            v_url = res["data"].get("hdplay") or res["data"].get("play")
+            if not v_url.startswith("http"):
+                v_url = "https://www.tikwm.com" + v_url
+            v_res = requests.get(v_url, stream=True, timeout=15)
+            if v_res.status_code == 200:
+                with open(save_path, "wb") as f:
+                    for chunk in v_res.iter_content(chunk_size=1024 * 1024):
+                        if chunk:
+                            f.write(chunk)
+                if (
+                    os.path.exists(save_path)
+                    and os.path.getsize(save_path) > 30000
+                ):
+                    return True
+    except Exception:
+        pass
+
+    return False
+
+# ==========================================
+# 5. VÒNG LẶP ĐIỀU PHỐI TẢI TUẦN TỰ
+# ==========================================
+for index, url in enumerate(urls, start=1):
+    print(f"--------------------------------------------------")
+    print(f"[{index}/{len(urls)}] Đang tải ...: {url}")
+    save_path = os.path.join(OUTPUT_DIR, f"{index}.mp4")
+    success = False
+
+    # 1. Douyin
+    if "douyin.com" in url or "iesdouyin.com" in url:
+        if download_douyin_fast(url, save_path):
+            print(f"✅ [Douyin HD] Thành công: {index}.mp4")
+            success = True
+
+    # 2. Google Drive
+    elif "drive.google.com" in url:
+        if download_gdrive_api(url, save_path):
+            print(f"✅ [Google Drive HD] Thành công: {index}.mp4")
+            success = True
+
+    # 3. Threads
+    elif "threads" in url.lower():
+        if download_threads_api(url, save_path):
+            print(f"✅ [Threads HD] Thành công: {index}.mp4")
+            success = True
+
+    # 4. Collab.inc
+    elif "collab.inc" in url:
+        if download_collab_inc_web(url, save_path):
+            print(f"✅ [Collab.inc HD] Thành công: {index}.mp4")
+            success = True
+
+    # 5. Storyful
+    elif "storyful.com" in url:
+        if download_storyful_api(url, save_path):
+            print(f"✅ [Storyful] Thành công: {index}.mp4")
+            success = True
+
+    # 6. Instagram
+    elif "instagram.com" in url:
+        if download_instagram_api(url, save_path):
+            print(f"✅ [Instagram HD] Thành công: {index}.mp4")
+            success = True
+
+    # 7. TikTok
+    elif "tiktok.com" in url:
+        if download_tiktok_api(url, save_path):
+            print(f"✅ [TikTok HD] Thành công: {index}.mp4")
+            success = True
+
+    # 8. Fallback: YouTube, Facebook & Tất cả trang còn lại
+    if not success:
+        ydl_opts = {
+            "outtmpl": os.path.join(OUTPUT_DIR, f"{index}.%(ext)s"),
+            "format": "best[ext=mp4]/best",
+            "nocheckcertificate": True,
+            "quiet": True,
+            "no_warnings": True,
+            "noprogress": True,
+            "retries": 5,
+            "http_headers": {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            },
+        }
+        if os.path.exists(COOKIES_FILE):
+            ydl_opts["cookiefile"] = COOKIES_FILE
+
+        try:
+            # Điều hướng toàn bộ đầu ra tiêu chuẩn để khóa dòng log phần trăm %
+            with open(os.devnull, 'w') as devnull:
+                old_stdout = sys.stdout
+                old_stderr = sys.stderr
+                sys.stdout = devnull
+                sys.stderr = devnull
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([url])
+                finally:
+                    sys.stdout = old_stdout
+                    sys.stderr = old_stderr
+            print(f"✅ [YouTube/FB/Web HD] Thành công: {index}.mp4")
+            success = True
+        except Exception:
+            pass
+
+    if not success:
+        print(f"❌ Lỗi: Không thể tải video {index} ({url})")
+
+print("\n Hoàn thành tải videos")
