@@ -38,7 +38,7 @@ st.markdown(
     </style>
     <div class="running-banner">
         <marquee behavior="scroll" direction="left" scrollamount="5">
-            ⚠️ Dự án mới nhú có lỗi liên hệ Ngọc Én (HCNS). Chúc bạn tải video vui vẻ và thao tác mượt mà nhé!
+            ⚠️ Dự án mới nhú có lỗi liên hệ Ngọc Én (HCNS). Để dùng bản Pro vui lòng donate trà sữa size L và full topping😍!
         </marquee>
     </div>
     """,
