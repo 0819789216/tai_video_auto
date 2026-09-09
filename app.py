@@ -6,7 +6,7 @@ import zipfile
 import streamlit as st
 
 st.set_page_config(
-    page_title="Công Cụ Tải Video Đa Nền Tảng",
+    page_title="Toll Tải Video Nhà Làm:))",
     page_icon="🎬",
     layout="centered",
 )
