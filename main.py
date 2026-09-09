@@ -5,7 +5,6 @@ import sys
 import time
 from pathlib import Path
 
-# Class Logger câm ép yt-dlp hoàn toàn không được in chữ ra Terminal
 class SilentLogger:
     def debug(self, msg): pass
     def warning(self, msg): pass
@@ -45,7 +44,6 @@ COOKIES_FILE = "cookies.txt"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Lọc danh sách link từ file input
 urls = []
 if os.path.exists(INPUT_FILE):
     with open(INPUT_FILE, "r", encoding="utf-8") as f:
@@ -179,7 +177,6 @@ def download_instagram_api(url, save_path):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Accept": "*/*"}
     clean_url = url.split("?")[0].rstrip("/")
     
-    # Cách 1: Thử tải qua API ddinstagram
     try:
         dd_url = clean_url.replace("instagram.com", "ddinstagram.com")
         scraper = cloudscraper.create_scraper()
@@ -194,7 +191,6 @@ def download_instagram_api(url, save_path):
     except Exception:
         pass
 
-    # Cách 2: Thử qua indown.io
     for attempt in range(2):
         try:
             scraper = cloudscraper.create_scraper()
@@ -347,15 +343,16 @@ for index, url in enumerate(urls, start=1):
 
     # 8. Fallback: YouTube, Facebook & Tất cả trang còn lại
     if not success:
+        # Tải theo định dạng đặt tên thông minh để không ghi đè nếu bài viết có nhiều video
         ydl_opts = {
-            "outtmpl": os.path.join(OUTPUT_DIR, f"{index}.%(ext)s"),
+            "outtmpl": os.path.join(OUTPUT_DIR, f"{index}_%(autonumber)s.%(ext)s"),
             "format": "best[ext=mp4]/best",
             "nocheckcertificate": True,
             "quiet": True,
             "no_warnings": True,
             "noprogress": True,
-            "logger": SilentLogger(),  # Tắt toàn bộ thông báo log của yt-dlp
-            "progress_hooks": [],      # Hủy bỏ các hook tiến trình
+            "logger": SilentLogger(),
+            "progress_hooks": [],
             "retries": 5,
             "http_headers": {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
