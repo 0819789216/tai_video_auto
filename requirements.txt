@@ -3,3 +3,4 @@ yt-dlp
 cloudscraper
 gdown
 streamlit
+yt-dlp>=2024.01.01
