@@ -12,9 +12,7 @@ st.set_page_config(
 )
 
 st.title("🎬 TOLL TẢI VIDEO NHÀ LÀM 🥲")
-st.caption(
-    "Được phát hành bởi Ngọc Én hẹ hẹ!!!"
-)
+st.caption("Được phát hành bởi Ngọc Én hẹ hẹ!!!")
 
 # 1. Khởi tạo Session State giữ nguyên kết quả không bị mất khi nhấn nút Tải xuống
 if "zip_bytes" not in st.session_state:
