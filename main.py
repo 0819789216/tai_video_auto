@@ -221,6 +221,7 @@ def download_douyin_fast(url, save_path):
         save_path,
         "--no-playlist",
         "--no-progress",
+        "--quiet",
         "--referer",
         "https://www.douyin.com/",
         "--concurrent-fragments",
@@ -281,25 +282,25 @@ for index, url in enumerate(urls, start=1):
     # 1. Douyin
     if "douyin.com" in url or "iesdouyin.com" in url:
         if download_douyin_fast(url, save_path):
-            print(f"✅ [Douyin HD] Thành công: {index}.mp4")
+            print(f"✅ [Douyin HD - CLI Fast] Thành công: {index}.mp4")
             success = True
 
     # 2. Google Drive
     elif "drive.google.com" in url:
         if download_gdrive_api(url, save_path):
-            print(f"✅ [Google Drive HD] Thành công: {index}.mp4")
+            print(f"✅ [Google Drive] Thành công: {index}.mp4")
             success = True
 
     # 3. Threads
     elif "threads" in url.lower():
         if download_threads_api(url, save_path):
-            print(f"✅ [Threads HD] Thành công: {index}.mp4")
+            print(f"✅ [Threads] Thành công: {index}.mp4")
             success = True
 
     # 4. Collab.inc
     elif "collab.inc" in url:
         if download_collab_inc_web(url, save_path):
-            print(f"✅ [Collab.inc HD] Thành công: {index}.mp4")
+            print(f"✅ [Collab.inc] Thành công: {index}.mp4")
             success = True
 
     # 5. Storyful
@@ -311,7 +312,7 @@ for index, url in enumerate(urls, start=1):
     # 6. Instagram
     elif "instagram.com" in url:
         if download_instagram_api(url, save_path):
-            print(f"✅ [Instagram HD] Thành công: {index}.mp4")
+            print(f"✅ [Instagram] Thành công: {index}.mp4")
             success = True
 
     # 7. TikTok
@@ -328,7 +329,8 @@ for index, url in enumerate(urls, start=1):
             "nocheckcertificate": True,
             "quiet": True,
             "no_warnings": True,
-            "noprogress": True,  # Tắt tiến trình % dòng tải
+            "noprogress": True,
+            "progress_hooks": [],
             "retries": 5,
             "http_headers": {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -338,8 +340,18 @@ for index, url in enumerate(urls, start=1):
             ydl_opts["cookiefile"] = COOKIES_FILE
 
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+            # Điều hướng stdout và stderr để ẩn hoàn toàn log của yt-dlp
+            with open(os.devnull, 'w') as devnull:
+                old_stdout = sys.stdout
+                old_stderr = sys.stderr
+                sys.stdout = devnull
+                sys.stderr = devnull
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([url])
+                finally:
+                    sys.stdout = old_stdout
+                    sys.stderr = old_stderr
             print(f"✅ [YouTube/FB/Web HD] Thành công: {index}.mp4")
             success = True
         except Exception:
