@@ -13,7 +13,7 @@ st.set_page_config(
 
 st.title("🎬 Công Cụ Tải Video Đa Nền Tảng")
 st.caption(
-    "Được phát bởi Ngọc Én hẹ hẹ!!!"
+    "Được phát hành bởi Ngọc Én hẹ hẹ!!!"
 )
 
 # 1. Khởi tạo Session State giữ nguyên kết quả không bị mất khi nhấn nút Tải xuống
