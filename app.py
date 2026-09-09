@@ -16,6 +16,7 @@ st.caption(
     "Hỗ trợ copy/paste nguyên bài Docs/Text chứa hàng trăm link (Douyin, TikTok, Threads, Insta, Drive...)"
 )
 
+# Khung nhập văn bản/link
 urls_input = st.text_area(
     "Dán toàn bộ văn bản hoặc danh sách link vào đây:",
     height=200,
@@ -26,12 +27,14 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
     if not urls_input.strip():
         st.warning("⚠️ Vui lòng dán văn bản/link vào ô trên!")
     else:
+        # Ghi nội dung vào file text.txt
         with open("text.txt", "w", encoding="utf-8") as f:
             f.write(urls_input.strip())
 
         output_dir = "VIDEOS"
         zip_path = "danh_sach_video_hoan_thanh.zip"
 
+        # Dọn dẹp thư mục cũ trước khi tải mới
         if os.path.exists(output_dir):
             shutil.rmtree(output_dir)
         if os.path.exists(zip_path):
@@ -43,6 +46,7 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
         log_expander = st.expander("📋 Nhật ký tiến trình (Terminal Live)", expanded=True)
         log_box = log_expander.empty()
 
+        # Gọi file main.py với chế độ unbuffered (-u) để đẩy log tức thì
         process = subprocess.Popen(
             [sys.executable, "-u", "main.py"],
             stdout=subprocess.PIPE,
@@ -58,33 +62,35 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
 
         for line in iter(process.stdout.readline, ""):
             logs.append(line)
-            # Giữ khung log cuộn xem được tối đa 20 dòng mới nhất
+            # Giữ khung log cuộn hiển thị tối đa 20 dòng mới nhất
             log_box.code("".join(logs[-20:]), language="text")
 
             if "Đang tải" in line:
                 status_text.markdown(f"**{line.strip()}**")
-            elif "Lỗi: Không thể tải video" in line or "ERROR:" in line:
+            elif "Lỗi: Không thể tải video" in line:
+                # Chỉ bắt đúng dòng tổng kết lỗi chính thức từ main.py
                 failed_links.append(line.strip())
 
         process.wait()
 
-        # Hiển thị kết quả
+        # Kiểm tra kết quả sau khi chạy xong
         if os.path.exists(output_dir) and os.listdir(output_dir):
             files = [f for f in os.listdir(output_dir) if f.endswith(".mp4")]
             st.success(f"🎉 Hoàn tất! Đã tải thành công {len(files)} video.")
 
-            # Báo tổng hợp danh sách link lỗi nếu có
+            # Hiển thị danh sách link lỗi chính xác nếu có
             if failed_links:
                 st.warning(f"⚠️ Phát hiện {len(failed_links)} video bị lỗi không tải được:")
                 st.code("\n".join(failed_links), language="text")
 
-            # Đóng gói ZIP
+            # Đóng gói tất cả video thành file ZIP duy nhất
             status_text.text("📦 Đang đóng gói tất cả video thành file ZIP...")
             with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
                 for file in files:
                     file_full_path = os.path.join(output_dir, file)
                     zipf.write(file_full_path, arcname=file)
 
+            # Nút tải file ZIP
             with open(zip_path, "rb") as fp:
                 st.download_button(
                     label=f"📥 TẢI XUỐNG TẤT CẢ ({len(files)} VIDEO - FILE .ZIP)",
@@ -94,6 +100,7 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
                     type="primary",
                 )
 
+            # Dọn dẹp thư mục sau khi hoàn tất
             shutil.rmtree(output_dir)
         else:
             st.error("❌ Không thể tải video nào. Vui lòng kiểm tra lại danh sách link hoặc file cookies.txt!")
