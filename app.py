@@ -6,7 +6,7 @@ import zipfile
 import streamlit as st
 
 st.set_page_config(
-    page_title="Công Cụ Tải Video Đa Nền Tảng (Bulk Download)",
+    page_title="Công Cụ Tải Video Đa Nền Tảng",
     page_icon="🎬",
     layout="centered",
 )
@@ -16,10 +16,9 @@ st.caption(
     "Hỗ trợ copy/paste nguyên bài Docs/Text chứa hàng trăm link (Douyin, TikTok, Threads, Insta, Drive...)"
 )
 
-# Khung nhập văn bản/link
 urls_input = st.text_area(
     "Dán toàn bộ văn bản hoặc danh sách link vào đây:",
-    height=250,
+    height=200,
     placeholder="Dán nguyên văn bản bài viết Google Docs chứa link vào đây...",
 )
 
@@ -27,14 +26,12 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
     if not urls_input.strip():
         st.warning("⚠️ Vui lòng dán văn bản/link vào ô trên!")
     else:
-        # 1. Ghi nội dung vào file text.txt
         with open("text.txt", "w", encoding="utf-8") as f:
             f.write(urls_input.strip())
 
-        output_dir = "VIDEOS"
+        output_dir = "downloaded_videos"
         zip_path = "danh_sach_video_hoan_thanh.zip"
 
-        # Dọn dẹp thư mục cũ trước khi tải mới
         if os.path.exists(output_dir):
             shutil.rmtree(output_dir)
         if os.path.exists(zip_path):
@@ -42,49 +39,52 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
 
         st.info("⏳ Đang phân tích và tiến hành tải video hàng loạt...")
 
-        # Tạo khung hiển thị tiến trình và log thu gọn
-        progress_bar = st.progress(0)
         status_text = st.empty()
-        log_expander = st.expander("📋 Xem chi tiết tiến trình tải", expanded=True)
+        log_expander = st.expander("📋 Nhật ký tiến trình (Terminal Live)", expanded=True)
         log_box = log_expander.empty()
 
-        # 2. Chạy file main.py và bắt luồng dữ liệu log trực tiếp
         process = subprocess.Popen(
-            [sys.executable, "main.py"],
+            [sys.executable, "-u", "main.py"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
             errors="ignore",
+            bufsize=1,
         )
 
         logs = []
+        failed_links = []
+
         for line in iter(process.stdout.readline, ""):
             logs.append(line)
-            # Chỉ hiển thị 15 dòng log mới nhất để giao diện web không bị đơ
-            log_box.code("".join(logs[-15:]), language="text")
+            # Giữ khung log cuộn xem được tối đa 20 dòng mới nhất
+            log_box.code("".join(logs[-20:]), language="text")
 
-            # Cập nhật thông báo ngắn
             if "Đang tải" in line:
-                status_text.text(f"🔄 {line.strip()}")
+                status_text.markdown(f"**{line.strip()}**")
+            elif "Lỗi: Không thể tải video" in line or "ERROR:" in line:
+                failed_links.append(line.strip())
 
         process.wait()
 
-        # 3. Nén file và tạo nút Download
+        # Hiển thị kết quả
         if os.path.exists(output_dir) and os.listdir(output_dir):
             files = [f for f in os.listdir(output_dir) if f.endswith(".mp4")]
-            st.success(f"🎉 Đã hoàn tất tải thành công {len(files)} video!")
+            st.success(f"🎉 Hoàn tất! Đã tải thành công {len(files)} video.")
 
+            # Báo tổng hợp danh sách link lỗi nếu có
+            if failed_links:
+                st.warning(f"⚠️ Phát hiện {len(failed_links)} video bị lỗi không tải được:")
+                st.code("\n".join(failed_links), language="text")
+
+            # Đóng gói ZIP
             status_text.text("📦 Đang đóng gói tất cả video thành file ZIP...")
-
-            with zipfile.ZipFile(
-                zip_path, "w", zipfile.ZIP_DEFLATED
-            ) as zipf:
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
                 for file in files:
                     file_full_path = os.path.join(output_dir, file)
                     zipf.write(file_full_path, arcname=file)
 
-            # Nút tải xuống file ZIP duy nhất
             with open(zip_path, "rb") as fp:
                 st.download_button(
                     label=f"📥 TẢI XUỐNG TẤT CẢ ({len(files)} VIDEO - FILE .ZIP)",
@@ -94,9 +94,6 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
                     type="primary",
                 )
 
-            # Dọn dẹp thư mục sau khi đóng gói xong để nhẹ server
             shutil.rmtree(output_dir)
         else:
-            st.error(
-                "❌ Không thể tải video. Vui lòng kiểm tra lại đường link hoặc file cookies.txt!"
-            )
+            st.error("❌ Không thể tải video nào. Vui lòng kiểm tra lại danh sách link hoặc file cookies.txt!")
