@@ -1,6 +1,5 @@
 requests
-yt-dlp
+yt-dlp>=2024.01.01
 cloudscraper
 gdown
 streamlit
-yt-dlp>=2024.01.01
