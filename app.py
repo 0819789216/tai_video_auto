@@ -11,7 +11,7 @@ st.set_page_config(
     layout="centered",
 )
 
-st.title("🎬 TOLL TẢI VIDEO NHÀ LÀM:))")
+st.title("🎬 TOLL TẢI VIDEO NHÀ LÀM-.-")
 st.caption(
     "Được phát hành bởi Ngọc Én hẹ hẹ!!!"
 )
