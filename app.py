@@ -13,7 +13,7 @@ st.set_page_config(
 
 st.title("🎬 Công Cụ Tải Video Đa Nền Tảng")
 st.caption(
-    "Hỗ trợ copy/paste nguyên bài Docs/Text chứa hàng trăm link (Douyin, TikTok, Threads, Insta, Drive...)"
+    "Hỗ trợ copy/paste nguyên bài Docs/Text chứa link (Douyin, TikTok, Threads, Insta, Drive...)"
 )
 
 # 1. Khởi tạo Session State giữ nguyên kết quả không bị mất khi nhấn nút Tải xuống
