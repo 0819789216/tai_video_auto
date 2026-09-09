@@ -27,8 +27,8 @@ st.markdown(
         font-size: 13px;
         border: 1px solid #ffeeba;
         box-shadow: 0px 4px 10px rgba(0,0,0,0.08);
-        width: 480px;
-        max-width: 80vw;
+        width: 480px; /* Tăng chiều dài khung chứa */
+        max-width: 80vw; /* Đảm bảo không bị vỡ giao diện trên điện thoại */
         overflow: hidden;
         white-space: nowrap;
     }
@@ -48,6 +48,7 @@ st.markdown(
 st.title("🎬 TOLL TẢI VIDEO NHÀ LÀM 🥲")
 st.caption("Được phát hành bởi Ngọc Én hẹ hẹ!!!")
 
+# 1. Khởi tạo Session State giữ nguyên kết quả không bị mất khi nhấn nút Tải xuống
 if "zip_bytes" not in st.session_state:
     st.session_state.zip_bytes = None
 if "success_count" not in st.session_state:
@@ -67,6 +68,7 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
     if not urls_input.strip():
         st.warning("⚠️ Vui lòng dán văn bản/link vào ô trên!")
     else:
+        # Reset trạng thái mỗi khi nhấn tải lượt mới
         st.session_state.zip_bytes = None
         st.session_state.success_count = 0
         st.session_state.failed_links = []
@@ -89,6 +91,7 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
         log_expander = st.expander("📋 Nhật ký tiến trình (Terminal Live)", expanded=True)
         log_box = log_expander.empty()
 
+        # Khởi chạy main.py ở chế độ unbuffered (-u)
         process = subprocess.Popen(
             [sys.executable, "-u", "main.py"],
             stdout=subprocess.PIPE,
@@ -100,25 +103,28 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
         )
 
         for line in iter(process.stdout.readline, ""):
-            # Lọc mọi biến thể của yt-dlp (có khoảng trắng, \r, hoặc viết hoa/thường)
-            check_line = line.lower()
-            if "[download]" not in check_line and "eta" not in check_line:
-                clean_print = line.replace('\r', '').strip()
-                if clean_print:
-                    st.session_state.logs.append(clean_print + "\n")
-                    log_box.code("".join(st.session_state.logs[-20:]), language="text")
+            # Loại bỏ sạch ký tự \r và các dòng tiến trình [download]
+            clean_line = line.replace("\r", "").strip()
+            
+            if clean_line and not clean_line.startswith("[download]") and "ETA" not in clean_line:
+                st.session_state.logs.append(clean_line + "\n")
+                # Giữ khung log cuộn xem 20 dòng mới nhất
+                log_box.code("".join(st.session_state.logs[-20:]), language="text")
 
             if "Đang tải" in line:
-                status_text.markdown(f"**{line.strip()}**")
+                status_text.markdown(f"**{clean_line}**")
             elif "Lỗi: Không thể tải video" in line:
-                st.session_state.failed_links.append(line.strip())
+                # Bắt đúng dòng báo lỗi chính thức từ main.py
+                st.session_state.failed_links.append(clean_line)
 
         process.wait()
 
+        # Kiểm tra kết quả trong thư mục VIDEOS
         if os.path.exists(output_dir) and os.listdir(output_dir):
             files = [f for f in os.listdir(output_dir) if f.endswith(".mp4")]
             st.session_state.success_count = len(files)
 
+            # Đóng gói ZIP
             with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
                 for file in files:
                     file_full_path = os.path.join(output_dir, file)
@@ -127,6 +133,7 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
             with open(zip_path, "rb") as fp:
                 st.session_state.zip_bytes = fp.read()
 
+            # Dọn dẹp thư mục tạm trên mây
             shutil.rmtree(output_dir)
             if os.path.exists(zip_path):
                 os.remove(zip_path)
@@ -135,6 +142,7 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
         else:
             st.error("❌ Không thể tải video nào. Vui lòng kiểm tra lại danh sách link hoặc file cookies.txt!")
 
+# 2. KHU VỰC HIỂN THỊ KẾT QUẢ CỐ ĐỊNH (Không bị reset khi bấm Tải file)
 if st.session_state.zip_bytes is not None:
     if st.session_state.logs:
         with st.expander("📋 Xem lại Nhật ký tiến trình đã chạy", expanded=False):
