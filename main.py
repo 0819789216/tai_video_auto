@@ -68,7 +68,7 @@ print(
 
 
 # ==========================================
-# 1. HÀM TẢI YOUTUBE / YOUTUBE SHORTS (4 LỚP PROXY BẮT LINK VƯỢT CLOUD)
+# 1. HÀM TẢI YOUTUBE / YOUTUBE SHORTS (SỬ DỤNG COOKIES VƯỢT TƯỜNG LỬA)
 # ==========================================
 def download_youtube_smart(url, save_path):
     shorts_match = re.search(
@@ -83,14 +83,51 @@ def download_youtube_smart(url, save_path):
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             " (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         ),
-        "Accept": "application/json, text/plain, */*",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
     }
 
-    # Gate 1: Cobalt Tools API Engine (Tự động xoay vòng các Instance công cộng)
+    # Cách 1: Chạy yt-dlp trực tiếp kèm file COOKIES.TXT đầy đủ
+    ydl_opts = {
+        "outtmpl": save_path,
+        "format": "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best",
+        "nocheckcertificate": True,
+        "quiet": True,
+        "no_warnings": True,
+        "noprogress": True,
+        "logger": SilentLogger(),
+        "retries": 10,
+        "fragment_retries": 10,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "mweb"],
+            }
+        },
+        "http_headers": headers,
+    }
+    
+    if os.path.exists(COOKIES_FILE):
+        ydl_opts["cookiefile"] = COOKIES_FILE
+
+    try:
+        with open(os.devnull, "w") as devnull:
+            old_stdout, old_stderr = sys.stdout, sys.stderr
+            sys.stdout, sys.stderr = devnull, devnull
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([clean_url])
+            finally:
+                sys.stdout, sys.stderr = old_stdout, old_stderr
+
+        if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
+            return True
+    except Exception:
+        pass
+
+    # Cách 2 Dự phòng: Nếu cookie gặp vấn đề, gọi qua Cobalt Proxy Engine
     cobalt_nodes = [
         "https://api.cobalt.tools",
         "https://cobalt-api.kwippy.com",
-        "https://co.wuk.sh",
     ]
     for node in cobalt_nodes:
         try:
@@ -114,96 +151,6 @@ def download_youtube_smart(url, save_path):
                             return True
         except Exception:
             continue
-
-    # Gate 2: SaveFrom Proxy API
-    try:
-        scraper = cloudscraper.create_scraper()
-        api_res = scraper.post(
-            "https://savefrom.net/api/convert",
-            json={"url": clean_url},
-            headers=headers,
-            timeout=10,
-        ).json()
-        for item in api_res.get("url", []):
-            mp4_url = item.get("url")
-            if mp4_url and "mp4" in item.get("ext", ""):
-                v_data = scraper.get(mp4_url, stream=True, timeout=30)
-                if v_data.status_code == 200:
-                    with open(save_path, "wb") as f:
-                        for chunk in v_data.iter_content(chunk_size=1024 * 1024):
-                            if chunk:
-                                f.write(chunk)
-                    if os.path.exists(save_path) and os.path.getsize(save_path) > 50000:
-                        return True
-    except Exception:
-        pass
-
-    # Gate 3: Invidious Proxy Stream
-    if video_id:
-        invidious_nodes = [
-            f"https://inv.tux.app/api/v1/videos/{video_id}",
-            f"https://invidious.nerdvpn.de/api/v1/videos/{video_id}",
-            f"https://yt.drgnz.club/api/v1/videos/{video_id}",
-        ]
-        for node in invidious_nodes:
-            try:
-                res = requests.get(node, headers=headers, timeout=8).json()
-                formats = res.get("formatStreams", [])
-                if formats:
-                    stream_url = formats[0].get("url")
-                    if stream_url:
-                        v_res = requests.get(stream_url, stream=True, timeout=30)
-                        if v_res.status_code == 200:
-                            with open(save_path, "wb") as f:
-                                for chunk in v_res.iter_content(chunk_size=1024 * 1024):
-                                    if chunk:
-                                        f.write(chunk)
-                            if os.path.exists(save_path) and os.path.getsize(save_path) > 50000:
-                                return True
-            except Exception:
-                continue
-
-    # Gate 4: yt-dlp với TV Client Emulation & PoToken Bypass
-    ydl_opts = {
-        "outtmpl": save_path,
-        "format": "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best",
-        "nocheckcertificate": True,
-        "quiet": True,
-        "no_warnings": True,
-        "noprogress": True,
-        "logger": SilentLogger(),
-        "retries": 5,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["mweb", "tv_embedded", "android"],
-                "player_skip": ["webpage", "configs"],
-            }
-        },
-        "http_headers": {
-            "User-Agent": (
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X)"
-                " AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1"
-                " Mobile/15E148 Safari/604.1"
-            ),
-        },
-    }
-    if os.path.exists(COOKIES_FILE):
-        ydl_opts["cookiefile"] = COOKIES_FILE
-
-    try:
-        with open(os.devnull, "w") as devnull:
-            old_stdout, old_stderr = sys.stdout, sys.stderr
-            sys.stdout, sys.stderr = devnull, devnull
-            try:
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([clean_url])
-            finally:
-                sys.stdout, sys.stderr = old_stdout, old_stderr
-
-        if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
-            return True
-    except Exception:
-        pass
 
     return False
 
