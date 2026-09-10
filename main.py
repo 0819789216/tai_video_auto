@@ -48,7 +48,7 @@ print(
 
 
 # ==========================================
-# 2. HÀM TẢI YOUTUBE / SHORTS CẢI TIẾN
+# FIX TOÀN BỘ HÀM TẢI YOUTUBE / SHORTS
 # ==========================================
 def download_youtube_smart(url, save_path):
     # Lấy đường dẫn tự động của ffmpeg
@@ -57,7 +57,7 @@ def download_youtube_smart(url, save_path):
     except Exception:
         ffmpeg_path = None
 
-    # Tự động chuyển đổi dạng link /shorts/ sang /watch?v= để yt-dlp nhận diện ổn định hơn
+    # Tự động chuyển đổi link Shorts (/shorts/ID) về link chuẩn (/watch?v=ID)
     shorts_match = re.search(
         r"(?:youtube\.com/shorts/|youtu\.be/|youtube\.com/watch\?v=)([a-zA-Z0-9_-]+)",
         url,
@@ -65,36 +65,38 @@ def download_youtube_smart(url, save_path):
     video_id = shorts_match.group(1) if shorts_match else None
     clean_url = f"https://www.youtube.com/watch?v={video_id}" if video_id else url
 
-    # ----------------------------------------------------
-    # PHƯƠNG ÁN 1: CẤU HÌNH YT-DLP VÀ IMAGEIO-FFMPEG CHUẨN CỦA BẠN
-    # ----------------------------------------------------
-    ydl_opts = {
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            " (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
+    }
+
+    # -----------------------------------------------------------------
+    # LỚP 1: TẢI TRỰC TIẾP BẰNG YT-DLP + IMAGEIO-FFMPEG (ĐOẠN CODE CỦA BẠN)
+    # -----------------------------------------------------------------
+    ydl_opts_base = {
         "format": "bestvideo+bestaudio/best",
-        "outtmpl": save_path,  # Lưu theo số thứ tự (1.mp4, 2.mp4)
+        "outtmpl": save_path,
         "merge_output_format": "mp4",
         "nocheckcertificate": True,
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,
         "logger": SilentLogger(),
-        "retries": 10,
-        "fragment_retries": 10,
-        "http_headers": {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                " (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-            ),
-        },
+        "retries": 5,
+        "fragment_retries": 5,
+        "http_headers": headers,
     }
 
     if ffmpeg_path:
-        ydl_opts["ffmpeg_location"] = ffmpeg_path
+        ydl_opts_base["ffmpeg_location"] = ffmpeg_path
 
     if os.path.exists(COOKIES_FILE):
-        ydl_opts["cookiefile"] = COOKIES_FILE
+        ydl_opts_base["cookiefile"] = COOKIES_FILE
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(ydl_opts_base) as ydl:
             ydl.download([clean_url])
 
         if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
@@ -102,16 +104,34 @@ def download_youtube_smart(url, save_path):
     except Exception:
         pass
 
-    # ----------------------------------------------------
-    # PHƯƠNG ÁN DỰ PHÒNG: NẾU BỊ CHẶN IP CLOUD -> XOAY VÒNG GATEWAY PROXY
-    # ----------------------------------------------------
+    # -----------------------------------------------------------------
+    # LỚP 2: GIẢ LẬP CLIENT MOBILE (IOS / MWEB) BẰNG YT-DLP KHI BỊ CHẶN IP
+    # -----------------------------------------------------------------
+    ydl_opts_mobile = ydl_opts_base.copy()
+    ydl_opts_mobile["extractor_args"] = {
+        "youtube": {
+            "player_client": ["ios", "mweb"],
+        }
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts_mobile) as ydl:
+            ydl.download([clean_url])
+
+        if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
+            return True
+    except Exception:
+        pass
+
+    # -----------------------------------------------------------------
+    # LỚP 3: PROXY STREAM GATEWAY (INVIDIOUS / COBALT) - TRÁNH 100% CHẶN IP CLOUD
+    # -----------------------------------------------------------------
     if video_id:
         invidious_gateways = [
             f"https://inv.tux.app/api/v1/videos/{video_id}",
             f"https://invidious.nerdvpn.de/api/v1/videos/{video_id}",
             f"https://yt.drgnz.club/api/v1/videos/{video_id}",
         ]
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         for gw in invidious_gateways:
             try:
                 res = requests.get(gw, headers=headers, timeout=6).json()
