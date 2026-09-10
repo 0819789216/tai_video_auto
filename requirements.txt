@@ -3,3 +3,4 @@ yt-dlp>=2024.01.01
 cloudscraper
 gdown
 streamlit
+imageio-ffmpeg
