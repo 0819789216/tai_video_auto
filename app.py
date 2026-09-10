@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 import sys
+import uuid
 import zipfile
 import streamlit as st
 
@@ -78,16 +79,14 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
         st.session_state.logs = []
         st.session_state.total_urls = 0
 
-        with open("text.txt", "w", encoding="utf-8") as f:
+        # Tạo ID định danh duy nhất cho mỗi lượt bấm tải (Tránh đụng độ giữa nhiều người dùng)
+        session_id = str(uuid.uuid4())[:8]
+        input_file = f"text_{session_id}.txt"
+        output_dir = f"VIDEOS_{session_id}"
+        zip_path = f"danh_sach_video_{session_id}.zip"
+
+        with open(input_file, "w", encoding="utf-8") as f:
             f.write(urls_input.strip())
-
-        output_dir = "VIDEOS"
-        zip_path = "danh_sach_video_hoan_thanh.zip"
-
-        if os.path.exists(output_dir):
-            shutil.rmtree(output_dir)
-        if os.path.exists(zip_path):
-            os.remove(zip_path)
 
         st.info("⏳ Đang phân tích và tiến hành tải video hàng loạt...")
 
@@ -97,8 +96,9 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
         )
         log_box = log_expander.empty()
 
+        # Truyền tham số đường dẫn file & thư mục riêng vào main.py
         process = subprocess.Popen(
-            [sys.executable, "-u", "main.py"],
+            [sys.executable, "-u", "main.py", input_file, output_dir],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -135,6 +135,7 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
 
         process.wait()
 
+        # Đóng gói kết quả từ thư mục riêng
         if os.path.exists(output_dir) and os.listdir(output_dir):
             files = [f for f in os.listdir(output_dir) if f.endswith(".mp4")]
 
@@ -154,12 +155,18 @@ if st.button("🚀 Bắt đầu tải hàng loạt", type="primary"):
             with open(zip_path, "rb") as fp:
                 st.session_state.zip_bytes = fp.read()
 
-            shutil.rmtree(output_dir)
+            # Dọn dẹp sạch sẽ các file tạm riêng sau khi hoàn tất
+            if os.path.exists(output_dir):
+                shutil.rmtree(output_dir)
+            if os.path.exists(input_file):
+                os.remove(input_file)
             if os.path.exists(zip_path):
                 os.remove(zip_path)
 
             st.rerun()
         else:
+            if os.path.exists(input_file):
+                os.remove(input_file)
             st.error(
                 "❌ Không thể tải video nào. Vui lòng kiểm tra lại danh sách"
                 " link hoặc file cookies.txt!"
