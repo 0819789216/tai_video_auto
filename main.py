@@ -5,10 +5,18 @@ import sys
 import time
 from pathlib import Path
 
+
 class SilentLogger:
-    def debug(self, msg): pass
-    def warning(self, msg): pass
-    def error(self, msg): pass
+
+    def debug(self, msg):
+        pass
+
+    def warning(self, msg):
+        pass
+
+    def error(self, msg):
+        pass
+
 
 # ==========================================
 # 1. KIỂM TRA VÀ TỰ ĐỘNG CÀI THƯ VIỆN CẦN THIẾT
@@ -30,6 +38,7 @@ def auto_install_packages():
         )
     except Exception:
         pass
+
 
 auto_install_packages()
 
@@ -56,19 +65,26 @@ if os.path.exists(INPUT_FILE):
                 urls.append(clean_url)
 
 print(
-    f"📌 Tìm thấy {len(urls)} link trong file {INPUT_FILE}. Bắt đầu tải theo đúng thứ tự 1->{len(urls)}...\n"
+    f"📌 Tìm thấy {len(urls)} link trong file {INPUT_FILE}. Bắt đầu tải theo"
+    f" đúng thứ tự 1->{len(urls)}...\n"
 )
+
 
 # ==========================================
 # 2. HÀM TẢI THREADS
 # ==========================================
 def download_threads_api(url, save_path):
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            " (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+        ),
         "Accept": "*/*",
     }
     scraper = cloudscraper.create_scraper()
-    clean_url = re.sub(r"threads\.com", "threads.net", url, flags=re.IGNORECASE)
+    clean_url = re.sub(
+        r"threads\.com", "threads.net", url, flags=re.IGNORECASE
+    )
     clean_url = re.sub(
         r"/media/?(?:\?.*)?$", "", clean_url, flags=re.IGNORECASE
     )
@@ -76,7 +92,10 @@ def download_threads_api(url, save_path):
 
     for attempt in range(3):
         try:
-            api_url = f"https://api.threadsphotodownloader.com/v2/media?url={clean_url}"
+            api_url = (
+                "https://api.threadsphotodownloader.com/v2/media?url="
+                f"{clean_url}"
+            )
             res = scraper.get(api_url, headers=headers, timeout=12).json()
             video_urls = [
                 v.get("download_url") or v.get("url")
@@ -93,12 +112,16 @@ def download_threads_api(url, save_path):
             time.sleep(1)
     return False
 
+
 # ==========================================
 # 3. HÀM TẢI COLLAB INC & STORYFUL
 # ==========================================
 def download_collab_inc_web(url, save_path):
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            " (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        ),
         "Referer": "https://vl.collab.inc/",
         "Origin": "https://vl.collab.inc",
     }
@@ -116,9 +139,7 @@ def download_collab_inc_web(url, save_path):
                 )
                 if v_res.status_code == 200:
                     with open(save_path, "wb") as f:
-                        for chunk in v_res.iter_content(
-                            chunk_size=1024 * 1024
-                        ):
+                        for chunk in v_res.iter_content(chunk_size=1024 * 1024):
                             if chunk:
                                 f.write(chunk)
                     if (
@@ -129,6 +150,7 @@ def download_collab_inc_web(url, save_path):
     except Exception:
         pass
     return False
+
 
 def download_storyful_api(url, save_path):
     headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://storyful.com/"}
@@ -161,6 +183,7 @@ def download_storyful_api(url, save_path):
             pass
     return False
 
+
 # ==========================================
 # 4. HÀM TẢI INSTAGRAM, TIKTOK, GOOGLE DRIVE & DOUYIN
 # ==========================================
@@ -173,17 +196,23 @@ def download_gdrive_api(url, save_path):
         pass
     return False
 
+
 def download_instagram_api(url, save_path):
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Accept": "*/*"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Accept": "*/*",
+    }
     clean_url = url.split("?")[0].rstrip("/")
-    
+
     try:
         dd_url = clean_url.replace("instagram.com", "ddinstagram.com")
         scraper = cloudscraper.create_scraper()
         res = scraper.get(dd_url, headers=headers, timeout=12)
         v_urls = re.findall(r'property="og:video" content="([^"]+)"', res.text)
         if v_urls:
-            v_data = scraper.get(v_urls[0].replace("&amp;", "&"), timeout=25).content
+            v_data = scraper.get(
+                v_urls[0].replace("&amp;", "&"), timeout=25
+            ).content
             if len(v_data) > 100000:
                 with open(save_path, "wb") as f:
                     f.write(v_data)
@@ -215,6 +244,7 @@ def download_instagram_api(url, save_path):
             time.sleep(1)
     return False
 
+
 def download_tiktok_api(url, save_path):
     for attempt in range(3):
         try:
@@ -231,6 +261,7 @@ def download_tiktok_api(url, save_path):
         except Exception:
             time.sleep(1)
     return False
+
 
 def download_douyin_fast(url, save_path):
     cmd = [
@@ -290,11 +321,12 @@ def download_douyin_fast(url, save_path):
 
     return False
 
+
 # ==========================================
 # 5. VÒNG LẶP ĐIỀU PHỐI TẢI TUẦN TỰ
 # ==========================================
 for index, url in enumerate(urls, start=1):
-    print(f"--------------------------------------------------")
+    print("--------------------------------------------------")
     print(f"[{index}/{len(urls)}] Đang tải ...: {url}")
     save_path = os.path.join(OUTPUT_DIR, f"{index}.mp4")
     success = False
@@ -343,9 +375,9 @@ for index, url in enumerate(urls, start=1):
 
     # 8. Fallback: YouTube, Facebook & Tất cả trang còn lại
     if not success:
-        # Tải theo định dạng đặt tên thông minh để không ghi đè nếu bài viết có nhiều video
         ydl_opts = {
-            "outtmpl": os.path.join(OUTPUT_DIR, f"{index}_%(autonumber)s.%(ext)s"),
+            # ĐÃ SỬA: Lưu đúng dạng index.mp4 (1.mp4, 2.mp4...)
+            "outtmpl": os.path.join(OUTPUT_DIR, f"{index}.%(ext)s"),
             "format": "best[ext=mp4]/best",
             "nocheckcertificate": True,
             "quiet": True,
@@ -355,14 +387,18 @@ for index, url in enumerate(urls, start=1):
             "progress_hooks": [],
             "retries": 5,
             "http_headers": {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                    " AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0"
+                    " Safari/537.36"
+                ),
             },
         }
         if os.path.exists(COOKIES_FILE):
             ydl_opts["cookiefile"] = COOKIES_FILE
 
         try:
-            with open(os.devnull, 'w') as devnull:
+            with open(os.devnull, "w") as devnull:
                 old_stdout = sys.stdout
                 old_stderr = sys.stderr
                 sys.stdout = devnull
