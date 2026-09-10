@@ -22,7 +22,6 @@ import cloudscraper
 import gdown
 import imageio_ffmpeg
 import requests
-import streamlit as st
 import yt_dlp
 
 INPUT_FILE = sys.argv[1] if len(sys.argv) > 1 else "text.txt"
@@ -30,11 +29,6 @@ OUTPUT_DIR = sys.argv[2] if len(sys.argv) > 2 else "VIDEOS"
 COOKIES_FILE = "cookies.txt"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-# Lấy Proxy tự động từ Streamlit Secrets (Nếu bạn cài Secrets)
-PROXY_URL = (
-    st.secrets.get("PROXY_URL", None) if hasattr(st, "secrets") else None
-)
 
 urls = []
 if os.path.exists(INPUT_FILE):
@@ -54,14 +48,16 @@ print(
 
 
 # ==========================================
-# 2. HÀM TẢI YOUTUBE / SHORTS CẢI TIẾN
+# FIX TOÀN BỘ HÀM TẢI YOUTUBE / SHORTS
 # ==========================================
 def download_youtube_smart(url, save_path):
+    # Lấy đường dẫn tự động của ffmpeg
     try:
         ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
     except Exception:
         ffmpeg_path = None
 
+    # Tự động chuyển đổi link Shorts (/shorts/ID) về link chuẩn (/watch?v=ID)
     shorts_match = re.search(
         r"(?:youtube\.com/shorts/|youtu\.be/|youtube\.com/watch\?v=)([a-zA-Z0-9_-]+)",
         url,
@@ -76,7 +72,10 @@ def download_youtube_smart(url, save_path):
         ),
     }
 
-    ydl_opts = {
+    # -----------------------------------------------------------------
+    # LỚP 1: TẢI TRỰC TIẾP BẰNG YT-DLP + IMAGEIO-FFMPEG (ĐOẠN CODE CỦA BẠN)
+    # -----------------------------------------------------------------
+    ydl_opts_base = {
         "format": "bestvideo+bestaudio/best",
         "outtmpl": save_path,
         "merge_output_format": "mp4",
@@ -85,23 +84,19 @@ def download_youtube_smart(url, save_path):
         "no_warnings": True,
         "noprogress": True,
         "logger": SilentLogger(),
-        "retries": 10,
-        "fragment_retries": 10,
+        "retries": 5,
+        "fragment_retries": 5,
         "http_headers": headers,
     }
 
-    if PROXY_URL:
-        ydl_opts["proxy"] = PROXY_URL
-
     if ffmpeg_path:
-        ydl_opts["ffmpeg_location"] = ffmpeg_path
+        ydl_opts_base["ffmpeg_location"] = ffmpeg_path
 
     if os.path.exists(COOKIES_FILE):
-        ydl_opts["cookiefile"] = COOKIES_FILE
+        ydl_opts_base["cookiefile"] = COOKIES_FILE
 
-    # Lớp 1: Tải trực tiếp bằng yt-dlp
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(ydl_opts_base) as ydl:
             ydl.download([clean_url])
 
         if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
@@ -109,7 +104,28 @@ def download_youtube_smart(url, save_path):
     except Exception:
         pass
 
-    # Lớp 2 Dự phòng: Gọi Invidious Gateway nếu IP Cloud bị chặn
+    # -----------------------------------------------------------------
+    # LỚP 2: GIẢ LẬP CLIENT MOBILE (IOS / MWEB) BẰNG YT-DLP KHI BỊ CHẶN IP
+    # -----------------------------------------------------------------
+    ydl_opts_mobile = ydl_opts_base.copy()
+    ydl_opts_mobile["extractor_args"] = {
+        "youtube": {
+            "player_client": ["ios", "mweb"],
+        }
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts_mobile) as ydl:
+            ydl.download([clean_url])
+
+        if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
+            return True
+    except Exception:
+        pass
+
+    # -----------------------------------------------------------------
+    # LỚP 3: PROXY STREAM GATEWAY (INVIDIOUS / COBALT) - TRÁNH 100% CHẶN IP CLOUD
+    # -----------------------------------------------------------------
     if video_id:
         invidious_gateways = [
             f"https://inv.tux.app/api/v1/videos/{video_id}",
@@ -133,6 +149,31 @@ def download_youtube_smart(url, save_path):
                                 return True
             except Exception:
                 continue
+
+    try:
+        res = requests.post(
+            "https://api.cobalt.tools/api/json",
+            json={"url": clean_url, "videoQuality": "720"},
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+            timeout=8,
+        )
+        if res.status_code == 200:
+            dl_url = res.json().get("url")
+            if dl_url:
+                v_res = requests.get(dl_url, stream=True, timeout=30)
+                if v_res.status_code == 200:
+                    with open(save_path, "wb") as f:
+                        for chunk in v_res.iter_content(chunk_size=1024 * 1024):
+                            if chunk:
+                                f.write(chunk)
+                    if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
+                        return True
+    except Exception:
+        pass
 
     return False
 
