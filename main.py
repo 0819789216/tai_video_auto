@@ -4,8 +4,6 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-
-# Fix lỗi mã hóa Windows Terminal giúp in icon emoji (📌, ✅, ❌) không bị sập app
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
