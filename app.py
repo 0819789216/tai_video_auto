@@ -45,7 +45,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.title("🎬 TOLL TẢI VIDEO NHÀ LÀM 🥲")
+st.title("🎬 TOOL TẢI VIDEO NHÀ LÀM 🥲")
 st.caption("Được phát hành bởi Ngọc Én hẹ hẹ!!!")
 
 if "zip_bytes" not in st.session_state:
