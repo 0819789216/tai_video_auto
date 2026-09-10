@@ -68,63 +68,77 @@ print(
 
 
 # ==========================================
-# 1. HÀM TẢI YOUTUBE / YOUTUBE SHORTS (CHUYÊN VƯỢT TƯỜNG LỬA CLOUD)
+# 1. HÀM TẢI YOUTUBE / YOUTUBE SHORTS (CHUYÊN VƯỢT CHẶN IP STREAMLIT CLOUD)
 # ==========================================
 def download_youtube_smart(url, save_path):
-    clean_url = url
     shorts_match = re.search(
         r"(?:youtube\.com/shorts/|youtu\.be/|youtube\.com/watch\?v=)([a-zA-Z0-9_-]+)",
         url,
     )
     video_id = shorts_match.group(1) if shorts_match else None
+    clean_url = f"https://www.youtube.com/watch?v={video_id}" if video_id else url
 
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            " (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+        ),
+        "Accept": "*/*",
+    }
+
+    # Phương pháp 1: Sử dụng cổng API Rapid/SaveFrom Proxy
     if video_id:
-        clean_url = f"https://www.youtube.com/watch?v={video_id}"
+        try:
+            scraper = cloudscraper.create_scraper()
+            api_res = scraper.post(
+                "https://savefrom.net/api/convert",
+                json={"url": clean_url},
+                headers=headers,
+                timeout=10,
+            ).json()
 
-    # Phương pháp 1: Dùng API Cobalt Proxy (Vượt qua 100% chặn IP Cloud của Youtube)
-    try:
-        cobalt_instances = [
-            "https://api.cobalt.tools/api/json",
-            "https://cobalt-api.kwippy.com/api/json",
+            url_list = api_res.get("url", [])
+            if url_list:
+                for item in url_list:
+                    mp4_url = item.get("url")
+                    if mp4_url and "mp4" in item.get("ext", ""):
+                        v_data = scraper.get(mp4_url, stream=True, timeout=25)
+                        if v_data.status_code == 200:
+                            with open(save_path, "wb") as f:
+                                for chunk in v_data.iter_content(chunk_size=1024 * 1024):
+                                    if chunk:
+                                        f.write(chunk)
+                            if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
+                                return True
+        except Exception:
+            pass
+
+    # Phương pháp 2: Sử dụng Invidious Public Instances (Trạm trung gian lấy video không bị chặn IP)
+    if video_id:
+        invidious_instances = [
+            f"https://inv.tux.app/api/v1/videos/{video_id}",
+            f"https://invidious.nerdvpn.de/api/v1/videos/{video_id}",
+            f"https://yt.drgnz.club/api/v1/videos/{video_id}",
         ]
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            ),
-        }
-
-        for instance in cobalt_instances:
+        for inst in invidious_instances:
             try:
-                res = requests.post(
-                    instance,
-                    json={"url": clean_url, "videoQuality": "720"},
-                    headers=headers,
-                    timeout=10,
-                )
-                data = res.json()
-                download_url = data.get("url")
-                if download_url:
-                    v_res = requests.get(download_url, stream=True, timeout=30)
-                    if v_res.status_code == 200:
-                        with open(save_path, "wb") as f:
-                            for chunk in v_res.iter_content(
-                                chunk_size=1024 * 1024
-                            ):
-                                if chunk:
-                                    f.write(chunk)
-                        if (
-                            os.path.exists(save_path)
-                            and os.path.getsize(save_path) > 50000
-                        ):
-                            return True
+                res = requests.get(inst, headers=headers, timeout=8).json()
+                formats = res.get("formatStreams", [])
+                if formats:
+                    stream_url = formats[0].get("url")
+                    if stream_url:
+                        v_res = requests.get(stream_url, stream=True, timeout=25)
+                        if v_res.status_code == 200:
+                            with open(save_path, "wb") as f:
+                                for chunk in v_res.iter_content(chunk_size=1024 * 1024):
+                                    if chunk:
+                                        f.write(chunk)
+                            if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
+                                return True
             except Exception:
                 continue
-    except Exception:
-        pass
 
-    # Phương pháp 2: yt-dlp giả lập Android Client
+    # Phương pháp 3: yt-dlp với TV Embedded HTML5 Client Bypass
     ydl_opts = {
         "outtmpl": save_path,
         "format": "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best",
@@ -134,13 +148,8 @@ def download_youtube_smart(url, save_path):
         "noprogress": True,
         "logger": SilentLogger(),
         "retries": 10,
-        "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
-        "http_headers": {
-            "User-Agent": (
-                "com.google.android.youtube/19.09.37 (Linux; U; Android 11;"
-                " en_US)"
-            ),
-        },
+        "extractor_args": {"youtube": {"player_client": ["tv_embedded", "android"]}},
+        "http_headers": headers,
     }
     if os.path.exists(COOKIES_FILE):
         ydl_opts["cookiefile"] = COOKIES_FILE
