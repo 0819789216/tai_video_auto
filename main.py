@@ -44,7 +44,6 @@ import gdown
 import requests
 import yt_dlp
 
-# Đọc tham số truyền từ app.py (nếu có), nếu không có sẽ lấy mặc định
 INPUT_FILE = sys.argv[1] if len(sys.argv) > 1 else "text.txt"
 OUTPUT_DIR = sys.argv[2] if len(sys.argv) > 2 else "VIDEOS"
 COOKIES_FILE = "cookies.txt"
@@ -68,6 +67,62 @@ print(
 )
 
 
+# ==========================================
+# 1. HÀM TẢI YOUTUBE / YOUTUBE SHORTS
+# ==========================================
+def download_youtube_smart(url, save_path):
+    # Tự động biến đổi link Shorts dạng /shorts/ID thành link /watch?v=ID
+    clean_url = url
+    shorts_match = re.search(r"youtube\.com/shorts/([a-zA-Z0-9_-]+)", url)
+    if shorts_match:
+        video_id = shorts_match.group(1)
+        clean_url = f"https://www.youtube.com/watch?v={video_id}"
+
+    ydl_opts = {
+        "outtmpl": save_path,
+        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "nocheckcertificate": True,
+        "quiet": True,
+        "no_warnings": True,
+        "noprogress": True,
+        "logger": SilentLogger(),
+        "retries": 10,
+        "fragment_retries": 10,
+        "http_headers": {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                " (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+            ),
+            "Accept": "*/*",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+    }
+    if os.path.exists(COOKIES_FILE):
+        ydl_opts["cookiefile"] = COOKIES_FILE
+
+    try:
+        with open(os.devnull, "w") as devnull:
+            old_stdout, old_stderr = sys.stdout, sys.stderr
+            sys.stdout, sys.stderr = devnull, devnull
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([clean_url])
+            finally:
+                sys.stdout, sys.stderr = old_stdout, old_stderr
+
+        if (
+            os.path.exists(save_path)
+            and os.path.getsize(save_path) > 30000
+        ):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+# ==========================================
+# 2. HÀM TẢI THREADS
+# ==========================================
 def download_threads_api(url, save_path):
     headers = {
         "User-Agent": (
@@ -108,6 +163,9 @@ def download_threads_api(url, save_path):
     return False
 
 
+# ==========================================
+# 3. HÀM TẢI COLLAB INC & STORYFUL
+# ==========================================
 def download_collab_inc_web(url, save_path):
     headers = {
         "User-Agent": (
@@ -176,6 +234,9 @@ def download_storyful_api(url, save_path):
     return False
 
 
+# ==========================================
+# 4. HÀM TẢI INSTAGRAM, TIKTOK, GOOGLE DRIVE & DOUYIN
+# ==========================================
 def download_gdrive_api(url, save_path):
     try:
         gdown.download(url, save_path, quiet=True, fuzzy=True)
@@ -311,85 +372,68 @@ def download_douyin_fast(url, save_path):
     return False
 
 
+# ==========================================
+# 5. VÒNG LẶP ĐIỀU PHỐI TẢI TUẦN TỰ
+# ==========================================
 for index, url in enumerate(urls, start=1):
     print("--------------------------------------------------")
     print(f"[{index}/{len(urls)}] Đang tải ...: {url}")
     save_path = os.path.join(OUTPUT_DIR, f"{index}.mp4")
     success = False
 
-    if "douyin.com" in url or "iesdouyin.com" in url:
+    # 1. YouTube & YouTube Shorts
+    if "youtube.com" in url or "youtu.be" in url:
+        if download_youtube_smart(url, save_path):
+            print(f"✅ [YouTube HD] Thành công: {index}.mp4")
+            success = True
+
+    # 2. Douyin
+    elif "douyin.com" in url or "iesdouyin.com" in url:
         if download_douyin_fast(url, save_path):
             print(f"✅ [Douyin HD] Thành công: {index}.mp4")
             success = True
 
+    # 3. Google Drive
     elif "drive.google.com" in url:
         if download_gdrive_api(url, save_path):
             print(f"✅ [Google Drive HD] Thành công: {index}.mp4")
             success = True
 
+    # 4. Threads
     elif "threads" in url.lower():
         if download_threads_api(url, save_path):
             print(f"✅ [Threads HD] Thành công: {index}.mp4")
             success = True
 
+    # 5. Collab.inc
     elif "collab.inc" in url:
         if download_collab_inc_web(url, save_path):
             print(f"✅ [Collab.inc HD] Thành công: {index}.mp4")
             success = True
 
+    # 6. Storyful
     elif "storyful.com" in url:
         if download_storyful_api(url, save_path):
             print(f"✅ [Storyful] Thành công: {index}.mp4")
             success = True
 
+    # 7. Instagram
     elif "instagram.com" in url:
         if download_instagram_api(url, save_path):
             print(f"✅ [Instagram HD] Thành công: {index}.mp4")
             success = True
 
+    # 8. TikTok
     elif "tiktok.com" in url:
         if download_tiktok_api(url, save_path):
             print(f"✅ [TikTok HD] Thành công: {index}.mp4")
             success = True
 
+    # 9. Fallback cho các trang còn lại
     if not success:
-        ydl_opts = {
-            "outtmpl": os.path.join(OUTPUT_DIR, f"{index}.%(ext)s"),
-            "format": "best[ext=mp4]/best",
-            "nocheckcertificate": True,
-            "quiet": True,
-            "no_warnings": True,
-            "noprogress": True,
-            "logger": SilentLogger(),
-            "progress_hooks": [],
-            "retries": 5,
-            "http_headers": {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-                    " AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0"
-                    " Safari/537.36"
-                ),
-            },
-        }
-        if os.path.exists(COOKIES_FILE):
-            ydl_opts["cookiefile"] = COOKIES_FILE
-
-        try:
-            with open(os.devnull, "w") as devnull:
-                old_stdout = sys.stdout
-                old_stderr = sys.stderr
-                sys.stdout = devnull
-                sys.stderr = devnull
-                try:
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        ydl.download([url])
-                finally:
-                    sys.stdout = old_stdout
-                    sys.stderr = old_stderr
-            print(f"✅ [YouTube/FB/Web HD] Thành công: {index}.mp4")
+        if download_youtube_smart(url, save_path):
+            print(f"✅ [Web Video HD] Thành công: {index}.mp4")
             success = True
-        except Exception:
-            pass
 
     if not success:
         print(f"❌ Lỗi: Không thể tải video {index} ({url})")
