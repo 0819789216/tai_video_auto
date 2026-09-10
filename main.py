@@ -68,7 +68,7 @@ print(
 
 
 # ==========================================
-# 1. HÀM TẢI YOUTUBE / YOUTUBE SHORTS (SỬ DỤNG COOKIES VƯỢT TƯỜNG LỬA)
+# 1. HÀM TẢI YOUTUBE / SHORTS (BYPASS CLOUD IP BLOCK)
 # ==========================================
 def download_youtube_smart(url, save_path):
     shorts_match = re.search(
@@ -83,29 +83,98 @@ def download_youtube_smart(url, save_path):
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             " (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
+        "Accept": "*/*",
     }
 
-    # Cách 1: Chạy yt-dlp trực tiếp kèm file COOKIES.TXT đầy đủ
+    # Cổng 1: Invidious Open Gateway (Bypass 100% IP Cloud bằng Proxy Stream)
+    if video_id:
+        invidious_gateways = [
+            f"https://api.invidious.io/api/v1/videos/{video_id}",
+            f"https://inv.tux.app/api/v1/videos/{video_id}",
+            f"https://invidious.nerdvpn.de/api/v1/videos/{video_id}",
+            f"https://yt.drgnz.club/api/v1/videos/{video_id}",
+        ]
+        for gw in invidious_gateways:
+            try:
+                res = requests.get(gw, headers=headers, timeout=6).json()
+                formats = res.get("formatStreams", [])
+                if formats:
+                    # Lấy link mp4 chất lượng tốt nhất
+                    direct_url = formats[-1].get("url") or formats[0].get("url")
+                    if direct_url:
+                        v_res = requests.get(direct_url, stream=True, timeout=30)
+                        if v_res.status_code == 200:
+                            with open(save_path, "wb") as f:
+                                for chunk in v_res.iter_content(chunk_size=1024 * 1024):
+                                    if chunk:
+                                        f.write(chunk)
+                            if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
+                                return True
+            except Exception:
+                continue
+
+    # Cổng 2: Cobalt Tools V2 API
+    try:
+        res = requests.post(
+            "https://api.cobalt.tools/api/json",
+            json={"url": clean_url, "videoQuality": "720"},
+            headers={**headers, "Accept": "application/json", "Content-Type": "application/json"},
+            timeout=8,
+        )
+        if res.status_code == 200:
+            dl_url = res.json().get("url")
+            if dl_url:
+                v_res = requests.get(dl_url, stream=True, timeout=30)
+                if v_res.status_code == 200:
+                    with open(save_path, "wb") as f:
+                        for chunk in v_res.iter_content(chunk_size=1024 * 1024):
+                            if chunk:
+                                f.write(chunk)
+                    if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
+                        return True
+    except Exception:
+        pass
+
+    # Cổng 3: SaveFrom Engine API
+    try:
+        scraper = cloudscraper.create_scraper()
+        api_res = scraper.post(
+            "https://savefrom.net/api/convert",
+            json={"url": clean_url},
+            headers=headers,
+            timeout=8,
+        ).json()
+        for item in api_res.get("url", []):
+            mp4_url = item.get("url")
+            if mp4_url and "mp4" in item.get("ext", ""):
+                v_data = scraper.get(mp4_url, stream=True, timeout=30)
+                if v_data.status_code == 200:
+                    with open(save_path, "wb") as f:
+                        for chunk in v_data.iter_content(chunk_size=1024 * 1024):
+                            if chunk:
+                                f.write(chunk)
+                    if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
+                        return True
+    except Exception:
+        pass
+
+    # Cổng 4: Fallback yt-dlp với iOS Client Emulation
     ydl_opts = {
         "outtmpl": save_path,
-        "format": "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best",
+        "format": "best[ext=mp4]/best",
         "nocheckcertificate": True,
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,
         "logger": SilentLogger(),
-        "retries": 10,
-        "fragment_retries": 10,
+        "retries": 5,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "mweb"],
+                "player_client": ["ios", "mweb"],
             }
         },
         "http_headers": headers,
     }
-    
     if os.path.exists(COOKIES_FILE):
         ydl_opts["cookiefile"] = COOKIES_FILE
 
@@ -123,34 +192,6 @@ def download_youtube_smart(url, save_path):
             return True
     except Exception:
         pass
-
-    # Cách 2 Dự phòng: Nếu cookie gặp vấn đề, gọi qua Cobalt Proxy Engine
-    cobalt_nodes = [
-        "https://api.cobalt.tools",
-        "https://cobalt-api.kwippy.com",
-    ]
-    for node in cobalt_nodes:
-        try:
-            res = requests.post(
-                f"{node}/",
-                json={"url": clean_url, "videoQuality": "720"},
-                headers={**headers, "Accept": "application/json", "Content-Type": "application/json"},
-                timeout=8,
-            )
-            if res.status_code == 200:
-                data = res.json()
-                dl_url = data.get("url")
-                if dl_url:
-                    v_res = requests.get(dl_url, stream=True, timeout=30)
-                    if v_res.status_code == 200:
-                        with open(save_path, "wb") as f:
-                            for chunk in v_res.iter_content(chunk_size=1024 * 1024):
-                                if chunk:
-                                    f.write(chunk)
-                        if os.path.exists(save_path) and os.path.getsize(save_path) > 50000:
-                            return True
-        except Exception:
-            continue
 
     return False
 
