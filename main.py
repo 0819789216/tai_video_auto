@@ -7,6 +7,7 @@ from pathlib import Path
 
 
 class SilentLogger:
+
     def debug(self, msg):
         pass
 
@@ -16,30 +17,6 @@ class SilentLogger:
     def error(self, msg):
         pass
 
-
-# ==========================================
-# 1. KIỂM TRA VÀ TỰ ĐỘNG CÀI THƯ VIỆN CẦN THIẾT
-# ==========================================
-def auto_install_packages():
-    required_packages = ["requests", "yt-dlp", "cloudscraper", "gdown", "imageio-ffmpeg"]
-    for pkg in required_packages:
-        try:
-            __import__(pkg.replace("-", "_"))
-        except ImportError:
-            print(f"⏳ Đang cài đặt thư viện {pkg}...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
-
-    try:
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        pass
-
-
-auto_install_packages()
 
 import cloudscraper
 import gdown
@@ -74,7 +51,7 @@ print(
 # 2. HÀM TẢI YOUTUBE / SHORTS CẢI TIẾN
 # ==========================================
 def download_youtube_smart(url, save_path):
-    # Lấy tự động đường dẫn ffmpeg binary
+    # Lấy đường dẫn tự động của ffmpeg
     try:
         ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
     except Exception:
@@ -88,9 +65,12 @@ def download_youtube_smart(url, save_path):
     video_id = shorts_match.group(1) if shorts_match else None
     clean_url = f"https://www.youtube.com/watch?v={video_id}" if video_id else url
 
+    # ----------------------------------------------------
+    # PHƯƠNG ÁN 1: CẤU HÌNH YT-DLP VÀ IMAGEIO-FFMPEG CHUẨN CỦA BẠN
+    # ----------------------------------------------------
     ydl_opts = {
         "format": "bestvideo+bestaudio/best",
-        "outtmpl": save_path,
+        "outtmpl": save_path,  # Lưu theo số thứ tự (1.mp4, 2.mp4)
         "merge_output_format": "mp4",
         "nocheckcertificate": True,
         "quiet": True,
@@ -113,7 +93,6 @@ def download_youtube_smart(url, save_path):
     if os.path.exists(COOKIES_FILE):
         ydl_opts["cookiefile"] = COOKIES_FILE
 
-    # Chạy yt-dlp trực tiếp
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([clean_url])
@@ -123,7 +102,34 @@ def download_youtube_smart(url, save_path):
     except Exception:
         pass
 
-    # Gateway dự phòng nếu yt-dlp gặp vấn đề với IP Data Center
+    # ----------------------------------------------------
+    # PHƯƠNG ÁN DỰ PHÒNG: NẾU BỊ CHẶN IP CLOUD -> XOAY VÒNG GATEWAY PROXY
+    # ----------------------------------------------------
+    if video_id:
+        invidious_gateways = [
+            f"https://inv.tux.app/api/v1/videos/{video_id}",
+            f"https://invidious.nerdvpn.de/api/v1/videos/{video_id}",
+            f"https://yt.drgnz.club/api/v1/videos/{video_id}",
+        ]
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        for gw in invidious_gateways:
+            try:
+                res = requests.get(gw, headers=headers, timeout=6).json()
+                formats = res.get("formatStreams", [])
+                if formats:
+                    stream_url = formats[-1].get("url") or formats[0].get("url")
+                    if stream_url:
+                        v_res = requests.get(stream_url, stream=True, timeout=30)
+                        if v_res.status_code == 200:
+                            with open(save_path, "wb") as f:
+                                for chunk in v_res.iter_content(chunk_size=1024 * 1024):
+                                    if chunk:
+                                        f.write(chunk)
+                            if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
+                                return True
+            except Exception:
+                continue
+
     try:
         res = requests.post(
             "https://api.cobalt.tools/api/json",
