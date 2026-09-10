@@ -68,33 +68,78 @@ print(
 
 
 # ==========================================
-# 1. HÀM TẢI YOUTUBE / YOUTUBE SHORTS
+# 1. HÀM TẢI YOUTUBE / YOUTUBE SHORTS (CHUYÊN VƯỢT TƯỜNG LỬA CLOUD)
 # ==========================================
 def download_youtube_smart(url, save_path):
-    # Tự động biến đổi link Shorts dạng /shorts/ID thành link /watch?v=ID
     clean_url = url
-    shorts_match = re.search(r"youtube\.com/shorts/([a-zA-Z0-9_-]+)", url)
-    if shorts_match:
-        video_id = shorts_match.group(1)
+    shorts_match = re.search(
+        r"(?:youtube\.com/shorts/|youtu\.be/|youtube\.com/watch\?v=)([a-zA-Z0-9_-]+)",
+        url,
+    )
+    video_id = shorts_match.group(1) if shorts_match else None
+
+    if video_id:
         clean_url = f"https://www.youtube.com/watch?v={video_id}"
 
+    # Phương pháp 1: Dùng API Cobalt Proxy (Vượt qua 100% chặn IP Cloud của Youtube)
+    try:
+        cobalt_instances = [
+            "https://api.cobalt.tools/api/json",
+            "https://cobalt-api.kwippy.com/api/json",
+        ]
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            ),
+        }
+
+        for instance in cobalt_instances:
+            try:
+                res = requests.post(
+                    instance,
+                    json={"url": clean_url, "videoQuality": "720"},
+                    headers=headers,
+                    timeout=10,
+                )
+                data = res.json()
+                download_url = data.get("url")
+                if download_url:
+                    v_res = requests.get(download_url, stream=True, timeout=30)
+                    if v_res.status_code == 200:
+                        with open(save_path, "wb") as f:
+                            for chunk in v_res.iter_content(
+                                chunk_size=1024 * 1024
+                            ):
+                                if chunk:
+                                    f.write(chunk)
+                        if (
+                            os.path.exists(save_path)
+                            and os.path.getsize(save_path) > 50000
+                        ):
+                            return True
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    # Phương pháp 2: yt-dlp giả lập Android Client
     ydl_opts = {
         "outtmpl": save_path,
-        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "format": "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best",
         "nocheckcertificate": True,
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,
         "logger": SilentLogger(),
         "retries": 10,
-        "fragment_retries": 10,
+        "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
         "http_headers": {
             "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                " (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+                "com.google.android.youtube/19.09.37 (Linux; U; Android 11;"
+                " en_US)"
             ),
-            "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.9",
         },
     }
     if os.path.exists(COOKIES_FILE):
@@ -110,13 +155,11 @@ def download_youtube_smart(url, save_path):
             finally:
                 sys.stdout, sys.stderr = old_stdout, old_stderr
 
-        if (
-            os.path.exists(save_path)
-            and os.path.getsize(save_path) > 30000
-        ):
+        if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
             return True
     except Exception:
         pass
+
     return False
 
 
