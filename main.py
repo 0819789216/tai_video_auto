@@ -18,9 +18,6 @@ class SilentLogger:
         pass
 
 
-# ==========================================
-# 1. KIỂM TRA VÀ TỰ ĐỘNG CÀI THƯ VIỆN CẦN THIẾT
-# ==========================================
 def auto_install_packages():
     required_packages = ["requests", "yt-dlp", "cloudscraper", "gdown"]
     for pkg in required_packages:
@@ -47,8 +44,9 @@ import gdown
 import requests
 import yt_dlp
 
-INPUT_FILE = "text.txt"
-OUTPUT_DIR = "VIDEOS"
+# Đọc tham số truyền từ app.py (nếu có), nếu không có sẽ lấy mặc định
+INPUT_FILE = sys.argv[1] if len(sys.argv) > 1 else "text.txt"
+OUTPUT_DIR = sys.argv[2] if len(sys.argv) > 2 else "VIDEOS"
 COOKIES_FILE = "cookies.txt"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -65,14 +63,11 @@ if os.path.exists(INPUT_FILE):
                 urls.append(clean_url)
 
 print(
-    f"📌 Tìm thấy {len(urls)} link trong file {INPUT_FILE}. Bắt đầu tải theo"
-    f" đúng thứ tự 1->{len(urls)}...\n"
+    f"📌 Tìm thấy {len(urls)} link trong file dữ liệu. Bắt đầu tải theo đúng"
+    f" thứ tự 1->{len(urls)}...\n"
 )
 
 
-# ==========================================
-# 2. HÀM TẢI THREADS
-# ==========================================
 def download_threads_api(url, save_path):
     headers = {
         "User-Agent": (
@@ -113,9 +108,6 @@ def download_threads_api(url, save_path):
     return False
 
 
-# ==========================================
-# 3. HÀM TẢI COLLAB INC & STORYFUL
-# ==========================================
 def download_collab_inc_web(url, save_path):
     headers = {
         "User-Agent": (
@@ -184,9 +176,6 @@ def download_storyful_api(url, save_path):
     return False
 
 
-# ==========================================
-# 4. HÀM TẢI INSTAGRAM, TIKTOK, GOOGLE DRIVE & DOUYIN
-# ==========================================
 def download_gdrive_api(url, save_path):
     try:
         gdown.download(url, save_path, quiet=True, fuzzy=True)
@@ -322,61 +311,49 @@ def download_douyin_fast(url, save_path):
     return False
 
 
-# ==========================================
-# 5. VÒNG LẶP ĐIỀU PHỐI TẢI TUẦN TỰ
-# ==========================================
 for index, url in enumerate(urls, start=1):
     print("--------------------------------------------------")
     print(f"[{index}/{len(urls)}] Đang tải ...: {url}")
     save_path = os.path.join(OUTPUT_DIR, f"{index}.mp4")
     success = False
 
-    # 1. Douyin
     if "douyin.com" in url or "iesdouyin.com" in url:
         if download_douyin_fast(url, save_path):
             print(f"✅ [Douyin HD] Thành công: {index}.mp4")
             success = True
 
-    # 2. Google Drive
     elif "drive.google.com" in url:
         if download_gdrive_api(url, save_path):
             print(f"✅ [Google Drive HD] Thành công: {index}.mp4")
             success = True
 
-    # 3. Threads
     elif "threads" in url.lower():
         if download_threads_api(url, save_path):
             print(f"✅ [Threads HD] Thành công: {index}.mp4")
             success = True
 
-    # 4. Collab.inc
     elif "collab.inc" in url:
         if download_collab_inc_web(url, save_path):
             print(f"✅ [Collab.inc HD] Thành công: {index}.mp4")
             success = True
 
-    # 5. Storyful
     elif "storyful.com" in url:
         if download_storyful_api(url, save_path):
             print(f"✅ [Storyful] Thành công: {index}.mp4")
             success = True
 
-    # 6. Instagram
     elif "instagram.com" in url:
         if download_instagram_api(url, save_path):
             print(f"✅ [Instagram HD] Thành công: {index}.mp4")
             success = True
 
-    # 7. TikTok
     elif "tiktok.com" in url:
         if download_tiktok_api(url, save_path):
             print(f"✅ [TikTok HD] Thành công: {index}.mp4")
             success = True
 
-    # 8. Fallback: YouTube, Facebook & Tất cả trang còn lại
     if not success:
         ydl_opts = {
-            # ĐÃ SỬA: Lưu đúng dạng index.mp4 (1.mp4, 2.mp4...)
             "outtmpl": os.path.join(OUTPUT_DIR, f"{index}.%(ext)s"),
             "format": "best[ext=mp4]/best",
             "nocheckcertificate": True,
