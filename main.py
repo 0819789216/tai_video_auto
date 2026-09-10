@@ -7,7 +7,6 @@ from pathlib import Path
 
 
 class SilentLogger:
-
     def debug(self, msg):
         pass
 
@@ -18,11 +17,14 @@ class SilentLogger:
         pass
 
 
+# ==========================================
+# 1. KIỂM TRA VÀ TỰ ĐỘNG CÀI THƯ VIỆN CẦN THIẾT
+# ==========================================
 def auto_install_packages():
-    required_packages = ["requests", "yt-dlp", "cloudscraper", "gdown"]
+    required_packages = ["requests", "yt-dlp", "cloudscraper", "gdown", "imageio-ffmpeg"]
     for pkg in required_packages:
         try:
-            __import__(pkg)
+            __import__(pkg.replace("-", "_"))
         except ImportError:
             print(f"⏳ Đang cài đặt thư viện {pkg}...")
             subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
@@ -41,6 +43,7 @@ auto_install_packages()
 
 import cloudscraper
 import gdown
+import imageio_ffmpeg
 import requests
 import yt_dlp
 
@@ -68,9 +71,16 @@ print(
 
 
 # ==========================================
-# 1. HÀM TẢI YOUTUBE / SHORTS (BYPASS CLOUD IP BLOCK)
+# 2. HÀM TẢI YOUTUBE / SHORTS CẢI TIẾN
 # ==========================================
 def download_youtube_smart(url, save_path):
+    # Lấy tự động đường dẫn ffmpeg binary
+    try:
+        ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        ffmpeg_path = None
+
+    # Tự động chuyển đổi dạng link /shorts/ sang /watch?v= để yt-dlp nhận diện ổn định hơn
     shorts_match = re.search(
         r"(?:youtube\.com/shorts/|youtu\.be/|youtube\.com/watch\?v=)([a-zA-Z0-9_-]+)",
         url,
@@ -78,47 +88,51 @@ def download_youtube_smart(url, save_path):
     video_id = shorts_match.group(1) if shorts_match else None
     clean_url = f"https://www.youtube.com/watch?v={video_id}" if video_id else url
 
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            " (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        ),
-        "Accept": "*/*",
+    ydl_opts = {
+        "format": "bestvideo+bestaudio/best",
+        "outtmpl": save_path,
+        "merge_output_format": "mp4",
+        "nocheckcertificate": True,
+        "quiet": True,
+        "no_warnings": True,
+        "noprogress": True,
+        "logger": SilentLogger(),
+        "retries": 10,
+        "fragment_retries": 10,
+        "http_headers": {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                " (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
+        },
     }
 
-    # Cổng 1: Invidious Open Gateway (Bypass 100% IP Cloud bằng Proxy Stream)
-    if video_id:
-        invidious_gateways = [
-            f"https://api.invidious.io/api/v1/videos/{video_id}",
-            f"https://inv.tux.app/api/v1/videos/{video_id}",
-            f"https://invidious.nerdvpn.de/api/v1/videos/{video_id}",
-            f"https://yt.drgnz.club/api/v1/videos/{video_id}",
-        ]
-        for gw in invidious_gateways:
-            try:
-                res = requests.get(gw, headers=headers, timeout=6).json()
-                formats = res.get("formatStreams", [])
-                if formats:
-                    # Lấy link mp4 chất lượng tốt nhất
-                    direct_url = formats[-1].get("url") or formats[0].get("url")
-                    if direct_url:
-                        v_res = requests.get(direct_url, stream=True, timeout=30)
-                        if v_res.status_code == 200:
-                            with open(save_path, "wb") as f:
-                                for chunk in v_res.iter_content(chunk_size=1024 * 1024):
-                                    if chunk:
-                                        f.write(chunk)
-                            if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
-                                return True
-            except Exception:
-                continue
+    if ffmpeg_path:
+        ydl_opts["ffmpeg_location"] = ffmpeg_path
 
-    # Cổng 2: Cobalt Tools V2 API
+    if os.path.exists(COOKIES_FILE):
+        ydl_opts["cookiefile"] = COOKIES_FILE
+
+    # Chạy yt-dlp trực tiếp
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([clean_url])
+
+        if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
+            return True
+    except Exception:
+        pass
+
+    # Gateway dự phòng nếu yt-dlp gặp vấn đề với IP Data Center
     try:
         res = requests.post(
             "https://api.cobalt.tools/api/json",
             json={"url": clean_url, "videoQuality": "720"},
-            headers={**headers, "Accept": "application/json", "Content-Type": "application/json"},
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
             timeout=8,
         )
         if res.status_code == 200:
@@ -135,69 +149,11 @@ def download_youtube_smart(url, save_path):
     except Exception:
         pass
 
-    # Cổng 3: SaveFrom Engine API
-    try:
-        scraper = cloudscraper.create_scraper()
-        api_res = scraper.post(
-            "https://savefrom.net/api/convert",
-            json={"url": clean_url},
-            headers=headers,
-            timeout=8,
-        ).json()
-        for item in api_res.get("url", []):
-            mp4_url = item.get("url")
-            if mp4_url and "mp4" in item.get("ext", ""):
-                v_data = scraper.get(mp4_url, stream=True, timeout=30)
-                if v_data.status_code == 200:
-                    with open(save_path, "wb") as f:
-                        for chunk in v_data.iter_content(chunk_size=1024 * 1024):
-                            if chunk:
-                                f.write(chunk)
-                    if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
-                        return True
-    except Exception:
-        pass
-
-    # Cổng 4: Fallback yt-dlp với iOS Client Emulation
-    ydl_opts = {
-        "outtmpl": save_path,
-        "format": "best[ext=mp4]/best",
-        "nocheckcertificate": True,
-        "quiet": True,
-        "no_warnings": True,
-        "noprogress": True,
-        "logger": SilentLogger(),
-        "retries": 5,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["ios", "mweb"],
-            }
-        },
-        "http_headers": headers,
-    }
-    if os.path.exists(COOKIES_FILE):
-        ydl_opts["cookiefile"] = COOKIES_FILE
-
-    try:
-        with open(os.devnull, "w") as devnull:
-            old_stdout, old_stderr = sys.stdout, sys.stderr
-            sys.stdout, sys.stderr = devnull, devnull
-            try:
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([clean_url])
-            finally:
-                sys.stdout, sys.stderr = old_stdout, old_stderr
-
-        if os.path.exists(save_path) and os.path.getsize(save_path) > 30000:
-            return True
-    except Exception:
-        pass
-
     return False
 
 
 # ==========================================
-# 2. HÀM TẢI THREADS
+# 3. HÀM TẢI THREADS
 # ==========================================
 def download_threads_api(url, save_path):
     headers = {
@@ -240,7 +196,7 @@ def download_threads_api(url, save_path):
 
 
 # ==========================================
-# 3. HÀM TẢI COLLAB INC & STORYFUL
+# 4. HÀM TẢI COLLAB INC & STORYFUL
 # ==========================================
 def download_collab_inc_web(url, save_path):
     headers = {
@@ -311,7 +267,7 @@ def download_storyful_api(url, save_path):
 
 
 # ==========================================
-# 4. HÀM TẢI INSTAGRAM, TIKTOK, GOOGLE DRIVE & DOUYIN
+# 5. HÀM TẢI INSTAGRAM, TIKTOK, GOOGLE DRIVE & DOUYIN
 # ==========================================
 def download_gdrive_api(url, save_path):
     try:
@@ -449,7 +405,7 @@ def download_douyin_fast(url, save_path):
 
 
 # ==========================================
-# 5. VÒNG LẶP ĐIỀU PHỐI TẢI TUẦN TỰ
+# 6. VÒNG LẶP ĐIỀU PHỐI TẢI TUẦN TỰ
 # ==========================================
 for index, url in enumerate(urls, start=1):
     print("--------------------------------------------------")
@@ -490,7 +446,7 @@ for index, url in enumerate(urls, start=1):
     # 6. Storyful
     elif "storyful.com" in url:
         if download_storyful_api(url, save_path):
-            print(f"✅ [Storyful] Thành công: {index}.mp4")
+            print(f"✅ [Storyful HD] Thành công: {index}.mp4")
             success = True
 
     # 7. Instagram
